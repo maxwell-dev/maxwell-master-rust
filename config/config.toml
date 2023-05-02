@@ -1,0 +1,18 @@
+ctrl_port = 12321
+http_port = 8081
+https_port = 1443
+
+[db]
+path = "/Users/xuchaoqian/codebase/bitbros/maxwell/maxwell-master-rust/data/"
+
+[db.seriesdb]
+level_zero_file_num_compaction_trigger = 4
+max_background_jobs = 4
+max_bytes_for_level_base = 1073741824
+max_bytes_for_level_multiplier = 8.0
+max_write_buffer_number = 4
+min_write_buffer_number_to_merge = 2
+table_cache_num_shard_bits = 4
+target_file_size_base = 134217728
+target_file_size_multiplier = 8
+write_buffer_size = 134217728

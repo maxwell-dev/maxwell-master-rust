@@ -1,0 +1,10 @@
+brace_style = "PreferSameLine"
+fn_params_layout = "Compressed"
+group_imports = "StdExternalCrate"
+ignore = []
+imports_indent = "Block"
+max_width = 100
+reorder_modules = true
+tab_spaces = 2
+use_small_heuristics = "Max"
+where_single_line = true
