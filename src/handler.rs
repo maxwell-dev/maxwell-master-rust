@@ -64,9 +64,24 @@ impl HandlerInner {
         FRONTEND_MGR.add(frontend);
         maxwell_protocol::RegisterServerRep { r#ref: req.r#ref }.into_enum()
       }
-      ProtocolMsg::ResolveIpReq(req) => {
-        maxwell_protocol::ResolveIpRep { ip: self.peer_addr.ip().to_string(), r#ref: req.r#ref }
-          .into_enum()
+      ProtocolMsg::RegisterBackendReq(req) => {
+        self.node_type.set(NodeType::Backend);
+        let backend = Backend::new(self.peer_addr.ip(), req.http_port);
+        *self.node_id.borrow_mut() = Some(backend.id().clone());
+        BACKEND_MGR.add(backend);
+        maxwell_protocol::RegisterServerRep { r#ref: req.r#ref }.into_enum()
+      }
+      ProtocolMsg::RegisterServerReq(req) => {
+        self.node_type.set(NodeType::Server);
+        let server = Server::new(self.peer_addr.ip(), req.http_port);
+        *self.node_id.borrow_mut() = Some(server.id().clone());
+        SERVER_MGR.add(server);
+        maxwell_protocol::RegisterServerRep { r#ref: req.r#ref }.into_enum()
+      }
+      ProtocolMsg::AddRoutesReq(req) => {
+        let server_id = self.node_id.borrow().as_ref().unwrap_or(&"unknown".to_owned()).clone();
+        ROUTE_MGR.add_reverse_route_group(server_id, req.paths);
+        maxwell_protocol::RegisterServerRep { r#ref: req.r#ref }.into_enum()
       }
       ProtocolMsg::GetRoutesReq(req) => {
         let mut route_groups = HashMap::default();
@@ -100,24 +115,16 @@ impl HandlerInner {
         }
         .into_enum()
       }
-      ProtocolMsg::RegisterBackendReq(req) => {
-        self.node_type.set(NodeType::Backend);
-        let backend = Backend::new(self.peer_addr.ip(), req.http_port);
-        *self.node_id.borrow_mut() = Some(backend.id().clone());
-        BACKEND_MGR.add(backend);
-        maxwell_protocol::RegisterServerRep { r#ref: req.r#ref }.into_enum()
+      ProtocolMsg::AssignFrontendReq(req) => {
+        maxwell_protocol::AssignFrontendRep {
+          endpoint: format!("127.0.0.1:10000"),
+          r#ref: req.r#ref,
+        }
       }
-      ProtocolMsg::RegisterServerReq(req) => {
-        self.node_type.set(NodeType::Server);
-        let server = Server::new(self.peer_addr.ip(), req.http_port);
-        *self.node_id.borrow_mut() = Some(server.id().clone());
-        SERVER_MGR.add(server);
-        maxwell_protocol::RegisterServerRep { r#ref: req.r#ref }.into_enum()
-      }
-      ProtocolMsg::AddRoutesReq(req) => {
-        let server_id = self.node_id.borrow().as_ref().unwrap_or(&"unknown".to_owned()).clone();
-        ROUTE_MGR.add_reverse_route_group(server_id, req.paths);
-        maxwell_protocol::RegisterServerRep { r#ref: req.r#ref }.into_enum()
+      .into_enum(),
+      ProtocolMsg::ResolveIpReq(req) => {
+        maxwell_protocol::ResolveIpRep { ip: self.peer_addr.ip().to_string(), r#ref: req.r#ref }
+          .into_enum()
       }
       _ => maxwell_protocol::ErrorRep {
         code: 1,
