@@ -29,7 +29,7 @@ async fn main() {
     App::new()
       .app_data(store_handle.clone())
       .wrap(middleware::Logger::default())
-      .route("/", web::get().to(index))
+      .route("/ws", web::get().to(index))
   })
   .bind(format!("{}:{}", "0.0.0.0", CONFIG.http_port))
   .unwrap()
