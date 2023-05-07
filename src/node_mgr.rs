@@ -1,4 +1,4 @@
-use std::{fmt::Debug, net::IpAddr, sync::Arc};
+use std::{borrow::Borrow, fmt::Debug, net::IpAddr, sync::Arc};
 
 use ahash::RandomState as AHasher;
 use bytes::{Bytes, BytesMut};
@@ -32,8 +32,8 @@ impl<N: Node> Coder<NodeId, N> for NodeCoder {
   type EncodedValue = Bytes;
 
   #[inline(always)]
-  fn encode_key(key: &NodeId) -> Self::EncodedKey {
-    BytesMut::from(key.as_bytes()).freeze()
+  fn encode_key<K: Borrow<NodeId>>(key: K) -> Self::EncodedKey {
+    BytesMut::from(key.borrow().as_bytes()).freeze()
   }
 
   #[inline(always)]
@@ -42,8 +42,8 @@ impl<N: Node> Coder<NodeId, N> for NodeCoder {
   }
 
   #[inline(always)]
-  fn encode_value(value: &N) -> Self::EncodedValue {
-    value.as_bytes()
+  fn encode_value<V: Borrow<N>>(value: V) -> Self::EncodedValue {
+    value.borrow().as_bytes()
   }
 
   #[inline(always)]

@@ -115,13 +115,15 @@ impl HandlerInner {
         }
         .into_enum()
       }
-      ProtocolMsg::AssignFrontendReq(req) => {
-        maxwell_protocol::AssignFrontendRep {
-          endpoint: format!("127.0.0.1:10000"),
-          r#ref: req.r#ref,
-        }
+      ProtocolMsg::AssignFrontendReq(req) => maxwell_protocol::AssignFrontendRep {
+        endpoint: format!("127.0.0.1:10000"),
+        r#ref: req.r#ref,
       }
       .into_enum(),
+      ProtocolMsg::LocateTopicReq(req) => {
+        maxwell_protocol::LocateTopicRep { endpoint: format!("127.0.0.1:20000"), r#ref: req.r#ref }
+          .into_enum()
+      }
       ProtocolMsg::ResolveIpReq(req) => {
         maxwell_protocol::ResolveIpRep { ip: self.peer_addr.ip().to_string(), r#ref: req.r#ref }
           .into_enum()

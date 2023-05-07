@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use std::sync::Arc;
+use std::{borrow::Borrow, collections::HashSet};
 
 use ahash::RandomState as AHasher;
 use bytes::{Bytes, BytesMut};
@@ -25,8 +25,8 @@ impl Coder<NodeId, PathSet> for RouteCoder {
   type EncodedValue = Bytes;
 
   #[inline(always)]
-  fn encode_key(key: &NodeId) -> Self::EncodedKey {
-    BytesMut::from(key.as_bytes()).freeze()
+  fn encode_key<K: Borrow<NodeId>>(key: K) -> Self::EncodedKey {
+    BytesMut::from(key.borrow().as_bytes()).freeze()
   }
 
   #[inline(always)]
@@ -35,8 +35,8 @@ impl Coder<NodeId, PathSet> for RouteCoder {
   }
 
   #[inline(always)]
-  fn encode_value(value: &PathSet) -> Self::EncodedValue {
-    bincode::serialize(value).unwrap().into()
+  fn encode_value<V: Borrow<PathSet>>(value: V) -> Self::EncodedValue {
+    bincode::serialize(value.borrow()).unwrap().into()
   }
 
   #[inline(always)]
