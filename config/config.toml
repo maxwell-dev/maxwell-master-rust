@@ -3,7 +3,7 @@ http_port = 8081
 https_port = 1443
 
 [db]
-path = "/Users/xuchaoqian/codebase/bitbros/maxwell/maxwell-master-rust/data/"
+path = "data"
 
 [db.seriesdb]
 level_zero_file_num_compaction_trigger = 4

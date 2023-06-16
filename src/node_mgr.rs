@@ -1,6 +1,7 @@
-use std::{borrow::Borrow, fmt::Debug, net::IpAddr, sync::Arc};
+use std::{borrow::Borrow, fmt::Debug, net::IpAddr, ops::Deref, sync::Arc};
 
 use ahash::RandomState as AHasher;
+use atomptr::AtomPtr;
 use bytes::{Bytes, BytesMut};
 use chrono::prelude::*;
 use dashmap::{mapref::one::Ref, DashMap};
@@ -52,29 +53,70 @@ impl<N: Node> Coder<NodeId, N> for NodeCoder {
   }
 }
 
+pub struct NodeBox<N: Node> {
+  pub(crate) node: N,
+  pub(crate) prev_id: AtomPtr<Option<NodeId>>,
+}
+
+pub struct NodeRef<'a, N: Node> {
+  node_box_ref: Ref<'a, NodeId, NodeBox<N>, AHasher>,
+}
+
+// impl<'a, N: Node> NodeRef<'a, N> {
+//   pub fn key(&self) -> &NodeId {
+//     self.node_box_ref.key()
+//   }
+
+//   pub fn value(&self) -> &N {
+//     &self.node_box_ref.node
+//   }
+// }
+
+impl<'a, N: Node> Deref for NodeRef<'a, N> {
+  type Target = N;
+
+  fn deref(&self) -> &N {
+    &self.node_box_ref.node
+  }
+}
+
 pub struct NodeMgr<N: Node> {
-  pub(crate) cache: DashMap<NodeId, N, AHasher>,
+  pub(crate) cache: DashMap<NodeId, NodeBox<N>, AHasher>,
   pub(crate) store: Arc<Store<N>>,
+  pub(crate) last_id: AtomPtr<Option<NodeId>>,
+  pub(crate) next_access_id: AtomPtr<Option<NodeId>>,
 }
 
 impl<N: Node> NodeMgr<N> {
   #[inline]
   pub(crate) fn new(store: Arc<Store<N>>) -> Self {
     let cache = DashMap::with_capacity_and_hasher(64, AHasher::default());
-    let node_mgr = NodeMgr { cache, store };
+    let node_mgr =
+      NodeMgr { cache, store, last_id: AtomPtr::new(None), next_access_id: AtomPtr::new(None) };
     node_mgr.recover();
     node_mgr
   }
 
   pub fn add(&self, node: N) {
-    let id_bytes = <NodeCoder as Coder<NodeId, N>>::encode_key(node.id());
-    let node_bytes = <NodeCoder as Coder<NodeId, N>>::encode_value(&node);
-    self.cache.insert(node.id().clone(), node);
-    self
-      .store
-      .raw()
-      .put(id_bytes, node_bytes)
-      .unwrap_or_else(|err| log::warn!("Failed to add node: err: {:?}", err));
+    match self.cache.entry(node.id().clone()) {
+      dashmap::mapref::entry::Entry::Occupied(_) => {
+        log::debug!("Node already exists: {:?}", node);
+        return;
+      }
+      dashmap::mapref::entry::Entry::Vacant(entry) => {
+        let id_bytes = <NodeCoder as Coder<NodeId, N>>::encode_key(node.id());
+        let node_bytes = <NodeCoder as Coder<NodeId, N>>::encode_value(&node);
+
+        let prev_id = self.swap_last_id(node.id().clone());
+        entry.insert(NodeBox { node, prev_id });
+
+        self
+          .store
+          .raw()
+          .put(id_bytes, node_bytes)
+          .unwrap_or_else(|err| log::warn!("Failed to add node: err: {:?}", err));
+      }
+    }
   }
 
   // pub fn remove(&self, id: &NodeId) {
@@ -83,21 +125,48 @@ impl<N: Node> NodeMgr<N> {
   // }
 
   pub fn activate(&self, id: &NodeId) {
-    if let Some(mut node) = self.cache.get_mut(id) {
-      let active_time = node.active_at();
+    if let Some(mut node_box) = self.cache.get_mut(id) {
+      let active_time = node_box.node.active_at();
       let now = Utc::now().timestamp() as u32;
-      node.set_active_at(now);
+      node_box.node.set_active_at(now);
       if now - active_time > 60 {
         self
           .store
-          .put(id, &*node)
+          .put(id, &node_box.node)
           .unwrap_or_else(|err| log::warn!("Failed to activate node: err: {:?}", err));
       }
     }
   }
 
-  pub fn get<'a>(&'a self, id: &NodeId) -> Option<Ref<'a, NodeId, N, AHasher>> {
-    self.cache.get(id)
+  pub fn get<'a>(&'a self, id: &NodeId) -> Option<NodeRef<'a, N>> {
+    if let Some(node_box) = self.cache.get(id) {
+      Some(NodeRef { node_box_ref: node_box })
+    } else {
+      None
+    }
+  }
+
+  pub fn next<'a>(&'a self) -> Option<NodeRef<'a, N>> {
+    if let Some(next_access_id) = &**self.next_access_id.get_ref() {
+      if let Some(node_box) = self.cache.get(next_access_id) {
+        self.next_access_id.swap((**node_box.prev_id.get_ref()).clone());
+        Some(NodeRef { node_box_ref: node_box })
+      } else {
+        self.next_access_id.swap(None);
+        None
+      }
+    } else {
+      if let Some(last_id) = &**self.last_id.get_ref() {
+        if let Some(node_box) = self.cache.get(last_id) {
+          self.next_access_id.swap((**node_box.prev_id.get_ref()).clone());
+          Some(NodeRef { node_box_ref: node_box })
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+    }
   }
 
   fn recover(&self) {
@@ -106,21 +175,33 @@ impl<N: Node> NodeMgr<N> {
     while cursor.is_valid() {
       let id = cursor.key().unwrap();
       let node = cursor.value().unwrap();
-      println!("id {:?}  node: {:?}", id, node);
-      self.cache.insert(id, node);
+
+      let prev_id = self.swap_last_id(id.clone());
+      self.cache.insert(id, NodeBox { node, prev_id });
+
       cursor.next();
     }
+  }
+
+  fn swap_last_id(&self, id: NodeId) -> AtomPtr<Option<NodeId>> {
+    let last_id: AtomPtr<Option<String>> = if let Some(last_id) = &**self.last_id.get_ref() {
+      AtomPtr::new(Some(last_id.clone()))
+    } else {
+      AtomPtr::new(None)
+    };
+    self.last_id.swap(Some(id));
+    last_id
   }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Frontend {
-  id: String,
-  http_port: u32,
-  https_port: u32,
-  public_ip: IpAddr,
-  private_ip: IpAddr,
-  active_at: u32,
+  pub(crate) id: String,
+  pub(crate) http_port: u32,
+  pub(crate) https_port: u32,
+  pub(crate) public_ip: IpAddr,
+  pub(crate) private_ip: IpAddr,
+  pub(crate) active_at: u32,
 }
 
 impl Frontend {
@@ -168,10 +249,10 @@ pub static FRONTEND_MGR: Lazy<FrontendMgr> = Lazy::new(|| {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Backend {
-  id: String,
-  http_port: u32,
-  private_ip: IpAddr,
-  active_at: u32,
+  pub(crate) id: String,
+  pub(crate) private_ip: IpAddr,
+  pub(crate) http_port: u32,
+  pub(crate) active_at: u32,
 }
 
 impl Backend {
@@ -212,10 +293,10 @@ pub static BACKEND_MGR: Lazy<BackendMgr> = Lazy::new(|| {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Server {
-  id: String,
-  http_port: u32,
-  private_ip: IpAddr,
-  active_at: u32,
+  pub(crate) id: String,
+  pub(crate) private_ip: IpAddr,
+  pub(crate) http_port: u32,
+  pub(crate) active_at: u32,
 }
 
 impl Server {
@@ -309,12 +390,31 @@ mod tests {
   #[test]
   fn test_basic() {
     let db = Arc::new(NormalDb::open("data/test_basic", &mut Options::new()).unwrap());
+    db.truncate_table("node_test_mgr").unwrap();
     let table = Arc::new(db.open_table("node_test_mgr").unwrap().enhance());
+
     let node_mgr = NodeMgr::<NodeTest>::new(table);
+
+    assert!(node_mgr.next().is_none());
+    assert!(node_mgr.next().is_none());
+
     let id = "1".to_owned();
     let input_node = NodeTest::new(id.clone(), Utc::now().timestamp() as u32);
     node_mgr.add(input_node);
     let output_node = node_mgr.get(&id);
-    assert_eq!(output_node.unwrap().value().id(), &id);
+    assert_eq!(output_node.unwrap().id(), &id);
+
+    assert_eq!(node_mgr.next().unwrap().id(), &id);
+    assert_eq!(node_mgr.next().unwrap().id(), &id);
+    assert_eq!(node_mgr.next().unwrap().id(), &id);
+
+    let id2 = "2".to_owned();
+    let input_node2 = NodeTest::new(id2.clone(), Utc::now().timestamp() as u32);
+    node_mgr.add(input_node2);
+
+    assert_eq!(node_mgr.next().unwrap().id(), &id2);
+    assert_eq!(node_mgr.next().unwrap().id(), &id);
+    assert_eq!(node_mgr.next().unwrap().id(), &id2);
+    assert_eq!(node_mgr.next().unwrap().id(), &id);
   }
 }

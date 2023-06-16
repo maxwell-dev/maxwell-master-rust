@@ -14,8 +14,13 @@ use actix_web_actors::ws;
 
 use crate::{config::CONFIG, handler::Handler};
 
+const MAX_FRAME_SIZE: usize = 134217728;
+
 async fn index(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
-  let resp = ws::start(Handler::new(&req), &req, stream);
+  log::info!("ws req: {:?}", req);
+  let resp =
+    ws::WsResponseBuilder::new(Handler::new(&req), &req, stream).frame_size(MAX_FRAME_SIZE).start();
+  log::info!("ws resp: {:?}", resp);
   resp
 }
 

@@ -5,10 +5,10 @@ run: build
 	RUST_BACKTRACE=1 ${CARGO} run -- --nocapture
 
 build:
-	${CARGO} build --color=always --all --all-targets
+	${CARGO} build --color=always --workspace --bins
 
 release:
-	${CARGO} build --release --color=always --all --all-targets && bin/release.sh
+	${CARGO} build --release --color=always --workspace --bins
 
 test:
 	RUST_BACKTRACE=1 ${CARGO} test -- --nocapture

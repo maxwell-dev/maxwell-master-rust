@@ -10,7 +10,7 @@ use actix_web::HttpRequest;
 use actix_web_actors::ws;
 use ahash::HashMap;
 use chrono::Utc;
-use maxwell_protocol::{self, SendError, *};
+use maxwell_protocol::{self, *};
 
 use crate::node_mgr::*;
 use crate::route_mgr::*;
@@ -115,11 +115,22 @@ impl HandlerInner {
         }
         .into_enum()
       }
-      ProtocolMsg::AssignFrontendReq(req) => maxwell_protocol::AssignFrontendRep {
-        endpoint: format!("127.0.0.1:10000"),
-        r#ref: req.r#ref,
+      ProtocolMsg::AssignFrontendReq(req) => {
+        if let Some(frontend) = FRONTEND_MGR.next() {
+          maxwell_protocol::AssignFrontendRep {
+            endpoint: format!("{}:{}", frontend.public_ip, frontend.http_port),
+            r#ref: req.r#ref,
+          }
+          .into_enum()
+        } else {
+          maxwell_protocol::ErrorRep {
+            code: 1,
+            desc: format!("Failed to find frontend."),
+            r#ref: req.r#ref,
+          }
+          .into_enum()
+        }
       }
-      .into_enum(),
       ProtocolMsg::LocateTopicReq(req) => {
         maxwell_protocol::LocateTopicRep { endpoint: format!("127.0.0.1:20000"), r#ref: req.r#ref }
           .into_enum()
@@ -214,17 +225,18 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Handler {
 }
 
 impl actix::Handler<ProtocolMsg> for Handler {
-  type Result = Result<ProtocolMsg, SendError>;
+  type Result = Result<ProtocolMsg, HandleError<ProtocolMsg>>;
 
   fn handle(&mut self, protocol_msg: ProtocolMsg, ctx: &mut Self::Context) -> Self::Result {
     let inner = self.inner.clone();
-    ctx.spawn(async move { inner.handle_internal_msg(protocol_msg).await }.into_actor(self).map(
-      move |res, _act, ctx| {
+    async move { inner.handle_internal_msg(protocol_msg).await }
+      .into_actor(self)
+      .map(move |res, _act, ctx| {
         if res.is_some() {
           ctx.binary(maxwell_protocol::encode(&res));
         }
-      },
-    ));
+      })
+      .spawn(ctx);
     Ok(ProtocolMsg::None)
   }
 }

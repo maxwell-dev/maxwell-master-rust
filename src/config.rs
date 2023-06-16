@@ -1,5 +1,8 @@
+use std::{env::current_dir, path::PathBuf};
+
 use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
+use serde::de::{Deserialize, Deserializer};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -11,6 +14,7 @@ pub struct Config {
 
 #[derive(Debug, Deserialize)]
 pub struct DbConfig {
+  #[serde(deserialize_with = "deserialize_path")]
   pub path: String,
   pub seriesdb: SeriesdbConfig,
 }
@@ -27,6 +31,24 @@ pub struct SeriesdbConfig {
   pub target_file_size_multiplier: i32,
   pub level_zero_file_num_compaction_trigger: i32,
   pub max_background_jobs: i32,
+}
+
+fn deserialize_path<'de, D>(deserializer: D) -> Result<String, D::Error>
+where D: Deserializer<'de> {
+  let path: String = Deserialize::deserialize(deserializer)?;
+  let path = PathBuf::from(path);
+  if path.is_absolute() {
+    Ok(path.display().to_string())
+  } else {
+    current_dir()
+      .with_context(|| format!("Failed to get current dir"))
+      .map_err(serde::de::Error::custom)?
+      .join(path)
+      .display()
+      .to_string()
+      .parse()
+      .map_err(serde::de::Error::custom)
+  }
 }
 
 impl Config {
