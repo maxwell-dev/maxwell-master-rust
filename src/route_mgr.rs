@@ -78,7 +78,6 @@ impl RouteMgr {
     while cursor.is_valid() {
       let server_id = cursor.key().unwrap();
       let path_set = cursor.value().unwrap();
-      println!("server_id: {:?} path_set: {:?}", server_id, path_set);
       self.cache.insert(server_id, path_set);
       cursor.next();
     }

@@ -6,6 +6,7 @@ mod db;
 mod handler;
 mod node_mgr;
 mod route_mgr;
+mod topic_mgr;
 
 use std::sync::Arc;
 
