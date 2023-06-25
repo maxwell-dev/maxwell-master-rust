@@ -1,6 +1,6 @@
 use std::{
   cell::{Cell, RefCell},
-  net::SocketAddr,
+  net::{IpAddr, SocketAddr},
   rc::Rc,
   sync::atomic::{AtomicU32, Ordering},
 };
@@ -174,8 +174,18 @@ impl HandlerInner {
     self: Rc<Self>, req: maxwell_protocol::AssignFrontendReq,
   ) -> maxwell_protocol::ProtocolMsg {
     if let Some(frontend) = FRONTEND_MGR.next() {
+      let ip = match self.peer_addr.ip() {
+        IpAddr::V4(ip) => {
+          if ip.is_private() {
+            frontend.private_ip
+          } else {
+            frontend.public_ip
+          }
+        }
+        IpAddr::V6(_) => frontend.public_ip,
+      };
       maxwell_protocol::AssignFrontendRep {
-        endpoint: format!("{}:{}", frontend.public_ip, frontend.http_port),
+        endpoint: format!("{}:{}", ip, frontend.http_port),
         r#ref: req.r#ref,
       }
       .into_enum()
