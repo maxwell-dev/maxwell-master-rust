@@ -98,25 +98,22 @@ impl<N: Node> NodeMgr<N> {
   }
 
   pub fn add(&self, node: N) {
+    let id_bytes = <NodeCoder as Coder<NodeId, N>>::encode_key(node.id());
+    let node_bytes = <NodeCoder as Coder<NodeId, N>>::encode_value(&node);
     match self.cache.entry(node.id().clone()) {
-      dashmap::mapref::entry::Entry::Occupied(_) => {
-        log::debug!("Node already exists: {:?}", node);
-        return;
+      dashmap::mapref::entry::Entry::Occupied(mut entry) => {
+        entry.get_mut().node = node;
       }
       dashmap::mapref::entry::Entry::Vacant(entry) => {
-        let id_bytes = <NodeCoder as Coder<NodeId, N>>::encode_key(node.id());
-        let node_bytes = <NodeCoder as Coder<NodeId, N>>::encode_value(&node);
-
         let prev_id = self.swap_last_id(node.id().clone());
         entry.insert(NodeBox { node, prev_id });
-
-        self
-          .store
-          .raw()
-          .put(id_bytes, node_bytes)
-          .unwrap_or_else(|err| log::warn!("Failed to add node: err: {:?}", err));
       }
     }
+    self
+      .store
+      .raw()
+      .put(id_bytes, node_bytes)
+      .unwrap_or_else(|err| log::warn!("Failed to add node: err: {:?}", err));
   }
 
   // pub fn remove(&self, id: &NodeId) {
@@ -330,9 +327,7 @@ impl Node for Server {
 pub type ServerMgr = NodeMgr<Server>;
 
 pub static SERVER_MGR: Lazy<ServerMgr> = Lazy::new(|| {
-  ServerMgr::new(Arc::new(
-    DB.open_table("backends").unwrap().enhance::<NodeId, Server, NodeCoder>(),
-  ))
+  ServerMgr::new(Arc::new(DB.open_table("servers").unwrap().enhance::<NodeId, Server, NodeCoder>()))
 });
 
 #[derive(Debug, Clone, Copy)]
