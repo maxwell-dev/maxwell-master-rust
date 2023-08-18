@@ -30,24 +30,22 @@ async fn ws(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Erro
 }
 
 async fn assign_frontend(req: HttpRequest) -> HttpResponse {
-  let body = HttpHandler::new(&req).assign_frontend();
   let rep = HttpResponse::Ok()
     .content_type(ContentType::json())
     .insert_header(("Access-Control-Allow-Origin", "*"))
     .force_close()
-    .json(body);
-  log::info!("http req: {:?}, rep: {:?}, body: {:?}", req, rep, body);
+    .json(HttpHandler::new(&req).assign_frontend());
+  log::info!("http req: {:?}, rep: {:?}", req, rep);
   rep
 }
 
 async fn get_frontends(req: HttpRequest) -> HttpResponse {
-  let body = HttpHandler::new(&req).get_frontends();
   let rep = HttpResponse::Ok()
     .content_type(ContentType::json())
     .insert_header(("Access-Control-Allow-Origin", "*"))
     .force_close()
-    .json(body);
-  log::info!("http req: {:?}, rep: {:?}, body: {:?}", req, rep, body);
+    .json(HttpHandler::new(&req).get_frontends());
+  log::info!("http req: {:?}, rep: {:?}", req, rep);
   rep
 }
 
