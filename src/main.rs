@@ -59,7 +59,15 @@ async fn main() {
     App::new()
       .app_data(store_handle.clone())
       .wrap(middleware::Logger::default())
-      .wrap(Cors::default().allow_any_origin().allow_any_header().send_wildcard())
+      .wrap(
+        Cors::default()
+          .allow_any_header()
+          .allow_any_origin()
+          .send_wildcard()
+          .block_on_origin_mismatch(false)
+          .expose_any_header()
+          .max_age(None),
+      )
       .route("/ws", web::get().to(ws))
       .route("/$assign-frontend", web::get().to(assign_frontend))
       .route("/$get-frontends", web::get().to(get_frontends))
