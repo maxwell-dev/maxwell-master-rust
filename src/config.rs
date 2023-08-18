@@ -1,4 +1,4 @@
-use std::{env::current_dir, path::PathBuf};
+use std::{env::current_dir, net::IpAddr, path::PathBuf};
 
 use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
@@ -9,7 +9,24 @@ pub struct Config {
   pub ctrl_port: u32,
   pub http_port: u32,
   pub https_port: u32,
+  pub frontends: Vec<FrontendConfig>,
+  pub backends: Vec<BackendConfig>,
   pub db: DbConfig,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FrontendConfig {
+  pub domain: String,
+  pub http_port: u32,
+  pub https_port: u32,
+  pub public_ip: IpAddr,
+  pub private_ip: IpAddr,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BackendConfig {
+  pub http_port: u32,
+  pub private_ip: IpAddr,
 }
 
 #[derive(Debug, Deserialize)]

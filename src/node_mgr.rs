@@ -4,7 +4,11 @@ use ahash::RandomState as AHasher;
 use atomptr::AtomPtr;
 use bytes::{Bytes, BytesMut};
 use chrono::prelude::*;
-use dashmap::{mapref::one::Ref, DashMap};
+use dashmap::{
+  iter::Iter,
+  mapref::{multiple::RefMulti, one::Ref},
+  DashMap,
+};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use seriesdb::{
@@ -62,21 +66,34 @@ pub struct NodeRef<'a, N: Node> {
   node_box_ref: Ref<'a, NodeId, NodeBox<N>, AHasher>,
 }
 
-// impl<'a, N: Node> NodeRef<'a, N> {
-//   pub fn key(&self) -> &NodeId {
-//     self.node_box_ref.key()
-//   }
-
-//   pub fn value(&self) -> &N {
-//     &self.node_box_ref.node
-//   }
-// }
-
 impl<'a, N: Node> Deref for NodeRef<'a, N> {
   type Target = N;
 
   fn deref(&self) -> &N {
     &self.node_box_ref.node
+  }
+}
+
+pub struct NodeRefMulti<'a, N: Node> {
+  node_box_ref: RefMulti<'a, NodeId, NodeBox<N>, AHasher>,
+}
+
+impl<'a, N: Node> Deref for NodeRefMulti<'a, N> {
+  type Target = N;
+
+  fn deref(&self) -> &N {
+    &self.node_box_ref.node
+  }
+}
+
+pub struct NodeIter<'a, N: Node> {
+  node_box_iter: Iter<'a, NodeId, NodeBox<N>, AHasher>,
+}
+
+impl<'a, N: Node> Iterator for NodeIter<'a, N> {
+  type Item = NodeRefMulti<'a, N>;
+  fn next(&mut self) -> Option<Self::Item> {
+    self.node_box_iter.next().map(|node_box_ref| NodeRefMulti { node_box_ref })
   }
 }
 
@@ -166,12 +183,16 @@ impl<N: Node> NodeMgr<N> {
     }
   }
 
+  pub fn iter<'a>(&'a self) -> NodeIter<'a, N> {
+    NodeIter { node_box_iter: self.cache.iter() }
+  }
+
   fn recover(&self) {
     let mut cursor = self.store.new_cursor();
     cursor.seek_to_first();
     while cursor.is_valid() {
       let id = cursor.key().unwrap();
-      let node = cursor.value().unwrap();
+      let node: N = cursor.value().unwrap();
 
       let prev_id = self.swap_last_id(id.clone());
       self.cache.insert(id, NodeBox { node, prev_id });

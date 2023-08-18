@@ -2,6 +2,14 @@ ctrl_port = 12321
 http_port = 8081
 https_port = 1443
 
+frontends = [
+  {domain = "localhost", public_ip = "127.0.0.1", private_ip = "127.0.0.1", http_port = 10000, https_port = 11443},
+]
+
+backends = [
+  {private_ip = "127.0.0.1", http_port = 20000},
+]
+
 [db]
 path = "data"
 
