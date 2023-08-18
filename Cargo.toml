@@ -10,6 +10,7 @@ log = "0.4.19"
 log4rs = "1.2.0"
 
 actix = "0.13.0"
+actix-cors = "0.6.4"
 actix-web = "4.3.1"
 actix-web-actors = "4.2.0"
 tokio = {version = "1.28.2", features = ["full"]}

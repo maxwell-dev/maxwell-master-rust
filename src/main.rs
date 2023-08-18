@@ -11,6 +11,7 @@ mod ws_handler;
 
 use std::sync::Arc;
 
+use actix_cors::Cors;
 use actix_web::{
   http::header::ContentType, middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer,
   Result,
@@ -31,21 +32,13 @@ async fn ws(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Erro
 async fn assign_frontend(req: HttpRequest) -> HttpResponse {
   let rep = HttpHandler::new(&req).assign_frontend();
   log::info!("http req: {:?}, rep: {:?}", req, rep);
-  HttpResponse::Ok()
-    .content_type(ContentType::json())
-    .insert_header(("Access-Control-Allow-Origin", "*"))
-    .force_close()
-    .json(rep)
+  HttpResponse::Ok().content_type(ContentType::json()).force_close().json(rep)
 }
 
 async fn get_frontends(req: HttpRequest) -> HttpResponse {
   let rep = HttpHandler::new(&req).get_frontends();
   log::info!("http req: {:?}, rep: {:?}", req, rep);
-  HttpResponse::Ok()
-    .content_type(ContentType::json())
-    .insert_header(("Access-Control-Allow-Origin", "*"))
-    .force_close()
-    .json(rep)
+  HttpResponse::Ok().content_type(ContentType::json()).force_close().json(rep)
 }
 
 #[actix_web::main]
@@ -58,6 +51,7 @@ async fn main() {
     App::new()
       .app_data(store_handle.clone())
       .wrap(middleware::Logger::default())
+      .wrap(Cors::default().allow_any_origin().allowed_methods(vec!["GET"]))
       .route("/ws", web::get().to(ws))
       .route("/$assign-frontend", web::get().to(assign_frontend))
       .route("/$get-frontends", web::get().to(get_frontends))
