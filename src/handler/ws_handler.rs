@@ -1,5 +1,6 @@
 use std::{
   cell::{Cell, RefCell},
+  hash::Hasher,
   net::{IpAddr, SocketAddr},
   rc::Rc,
   sync::atomic::{AtomicU32, Ordering},
@@ -8,8 +9,7 @@ use std::{
 use actix::{prelude::*, Actor};
 use actix_web::HttpRequest;
 use actix_web_actors::ws;
-use ahash::HashMap;
-use chrono::Utc;
+use ahash::{AHasher, HashMap};
 use maxwell_protocol::{self, *};
 
 use crate::route_mgr::*;
@@ -44,10 +44,10 @@ impl HandlerInner {
       ProtocolMsg::PingReq(req) => self.handle_ping_req(req),
       ProtocolMsg::RegisterFrontendReq(req) => self.handle_register_frontend_req(req),
       ProtocolMsg::RegisterBackendReq(req) => self.handle_register_backend_req(req),
-      ProtocolMsg::RegisterServerReq(req) => self.handle_register_server_req(req),
-      ProtocolMsg::AddRoutesReq(req) => self.handle_add_routes_req(req),
+      ProtocolMsg::RegisterServiceReq(req) => self.handle_register_service_req(req),
+      ProtocolMsg::SetRoutesReq(req) => self.handle_set_routes_req(req),
       ProtocolMsg::GetRoutesReq(req) => self.handle_get_routes_req(req),
-      ProtocolMsg::AssignFrontendReq(req) => self.handle_assign_frontend_req(req),
+      ProtocolMsg::PickFrontendReq(req) => self.handle_pick_frontend_req(req),
       ProtocolMsg::LocateTopicReq(req) => self.handle_locate_topic_req(req),
       ProtocolMsg::ResolveIpReq(req) => self.handle_resolve_ip_req(req),
       _ => maxwell_protocol::ErrorRep {
@@ -79,7 +79,7 @@ impl HandlerInner {
       match self.node_type.get() {
         NodeType::Frontend => FRONTEND_MGR.activate(node_id),
         NodeType::Backend => BACKEND_MGR.activate(node_id),
-        NodeType::Server => SERVER_MGR.activate(node_id),
+        NodeType::Service => SERVICE_MGR.activate(node_id),
         _ => {}
       }
     }
@@ -90,16 +90,19 @@ impl HandlerInner {
   fn handle_register_frontend_req(
     self: Rc<Self>, req: maxwell_protocol::RegisterFrontendReq,
   ) -> maxwell_protocol::ProtocolMsg {
+    let node_id = build_node_id(self.peer_addr.ip(), req.http_port);
     self.node_type.set(NodeType::Frontend);
-    let frontend = Frontend::new(
-      req.public_ip.parse().unwrap(),
-      self.peer_addr.ip(),
-      req.http_port,
-      req.https_port,
-    );
-    *self.node_id.borrow_mut() = Some(frontend.id().clone());
-    FRONTEND_MGR.add(frontend);
-    maxwell_protocol::RegisterFrontendRep { r#ref: req.r#ref }.into_enum()
+    *self.node_id.borrow_mut() = Some(node_id.clone());
+    if FRONTEND_MGR.get(&node_id).is_some() {
+      maxwell_protocol::RegisterFrontendRep { r#ref: req.r#ref }.into_enum()
+    } else {
+      maxwell_protocol::ErrorRep {
+        code: 1,
+        desc: format!("Not allowed to register this frontend: {:?}", node_id),
+        r#ref: req.r#ref,
+      }
+      .into_enum()
+    }
   }
 
   #[inline(always)]
@@ -107,30 +110,38 @@ impl HandlerInner {
     self: Rc<Self>, req: maxwell_protocol::RegisterBackendReq,
   ) -> maxwell_protocol::ProtocolMsg {
     self.node_type.set(NodeType::Backend);
-    let backend = Backend::new(self.peer_addr.ip(), req.http_port);
-    *self.node_id.borrow_mut() = Some(backend.id().clone());
-    BACKEND_MGR.add(backend);
-    maxwell_protocol::RegisterBackendRep { r#ref: req.r#ref }.into_enum()
+    let node_id = build_node_id(self.peer_addr.ip(), req.http_port);
+    *self.node_id.borrow_mut() = Some(node_id.clone());
+    if BACKEND_MGR.get(&node_id).is_some() {
+      maxwell_protocol::RegisterBackendRep { r#ref: req.r#ref }.into_enum()
+    } else {
+      maxwell_protocol::ErrorRep {
+        code: 1,
+        desc: format!("Not allowed to register this backend: {:?}", node_id),
+        r#ref: req.r#ref,
+      }
+      .into_enum()
+    }
   }
 
   #[inline(always)]
-  fn handle_register_server_req(
-    self: Rc<Self>, req: maxwell_protocol::RegisterServerReq,
+  fn handle_register_service_req(
+    self: Rc<Self>, req: maxwell_protocol::RegisterServiceReq,
   ) -> maxwell_protocol::ProtocolMsg {
-    self.node_type.set(NodeType::Server);
-    let server = Server::new(self.peer_addr.ip(), req.http_port);
-    *self.node_id.borrow_mut() = Some(server.id().clone());
-    SERVER_MGR.add(server);
-    maxwell_protocol::RegisterServerRep { r#ref: req.r#ref }.into_enum()
+    self.node_type.set(NodeType::Service);
+    let service = Service::new(self.peer_addr.ip(), req.http_port);
+    *self.node_id.borrow_mut() = Some(service.id().clone());
+    SERVICE_MGR.add(service);
+    maxwell_protocol::RegisterServiceRep { r#ref: req.r#ref }.into_enum()
   }
 
   #[inline(always)]
-  fn handle_add_routes_req(
-    self: Rc<Self>, req: maxwell_protocol::AddRoutesReq,
+  fn handle_set_routes_req(
+    self: Rc<Self>, req: maxwell_protocol::SetRoutesReq,
   ) -> maxwell_protocol::ProtocolMsg {
-    let server_id = self.node_id.borrow().as_ref().unwrap_or(&"unknown".to_owned()).clone();
-    ROUTE_MGR.add_reverse_route_group(server_id, req.paths);
-    maxwell_protocol::AddRoutesRep { r#ref: req.r#ref }.into_enum()
+    let service_id = self.node_id.borrow().as_ref().unwrap_or(&"unknown".to_owned()).clone();
+    ROUTE_MGR.add_reverse_route_group(service_id, req.paths);
+    maxwell_protocol::SetRoutesRep { r#ref: req.r#ref }.into_enum()
   }
 
   #[inline(always)]
@@ -141,12 +152,13 @@ impl HandlerInner {
 
     for reverse_route_group in ROUTE_MGR.reverse_route_group_iter() {
       let endpoint = reverse_route_group.key();
-      let path_set = reverse_route_group.value();
 
-      let is_healthy = match SERVER_MGR.get(endpoint) {
-        Some(server) => Utc::now().timestamp() as u32 - server.active_at() < 60,
-        None => false,
+      let is_healthy = match SERVICE_MGR.get(endpoint) {
+        Some(service) => service.is_healthy(),
+        None => continue,
       };
+
+      let path_set = reverse_route_group.value();
 
       for path in path_set {
         let route_group = route_groups.entry(path.to_owned()).or_insert_with(|| RouteGroup {
@@ -170,10 +182,10 @@ impl HandlerInner {
   }
 
   #[inline(always)]
-  fn handle_assign_frontend_req(
-    self: Rc<Self>, req: maxwell_protocol::AssignFrontendReq,
+  fn handle_pick_frontend_req(
+    self: Rc<Self>, req: maxwell_protocol::PickFrontendReq,
   ) -> maxwell_protocol::ProtocolMsg {
-    if let Some(frontend) = FRONTEND_MGR.next() {
+    if let Some(frontend) = FRONTEND_MGR.pick() {
       let ip = match self.peer_addr.ip() {
         IpAddr::V4(ip) => {
           if ip.is_private() {
@@ -184,7 +196,7 @@ impl HandlerInner {
         }
         IpAddr::V6(_) => frontend.public_ip,
       };
-      maxwell_protocol::AssignFrontendRep {
+      maxwell_protocol::PickFrontendRep {
         endpoint: format!("{}:{}", ip, frontend.http_port),
         r#ref: req.r#ref,
       }
@@ -224,7 +236,13 @@ impl HandlerInner {
         }
       }
       Ok(None) => {
-        if let Some(backend) = BACKEND_MGR.next() {
+        if let Some(backend) = BACKEND_MGR.pick_with(|_, ids| {
+          let mut hasher = AHasher::default();
+          hasher.write(req.topic.as_bytes());
+          let hash = hasher.finish();
+          let index = hash % ids.len() as u64;
+          ids.get(index as usize)
+        }) {
           match TOPIC_MGR.assign(req.topic.clone(), backend.id().clone()) {
             Ok(()) => maxwell_protocol::LocateTopicRep {
               endpoint: format!("{}:{}", backend.private_ip, backend.http_port),
@@ -242,7 +260,7 @@ impl HandlerInner {
           }
         } else {
           maxwell_protocol::ErrorRep {
-            code: 1,
+            code: 2,
             desc: format!("Failed to find an available backend: topic: {}", req.topic),
             r#ref: req.r#ref,
           }
@@ -250,7 +268,7 @@ impl HandlerInner {
         }
       }
       Err(err) => maxwell_protocol::ErrorRep {
-        code: 1,
+        code: 3,
         desc: format!("Failed to locate topic: {}, err: {}", req.topic, err),
         r#ref: req.r#ref,
       }
@@ -296,7 +314,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Handler {
           match self.inner.node_type.get() {
             NodeType::Frontend => FRONTEND_MGR.activate(node_id),
             NodeType::Backend => BACKEND_MGR.activate(node_id),
-            NodeType::Server => SERVER_MGR.activate(node_id),
+            NodeType::Service => SERVICE_MGR.activate(node_id),
             _ => {}
           }
         }

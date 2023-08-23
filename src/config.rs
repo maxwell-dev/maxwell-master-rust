@@ -1,4 +1,4 @@
-use std::{env::current_dir, net::IpAddr, path::PathBuf};
+use std::{env::current_dir, net::IpAddr, path::PathBuf, time::Duration};
 
 use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
@@ -6,12 +6,50 @@ use serde::de::{Deserialize, Deserializer};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-  pub ctrl_port: u32,
+  pub server: ServerConfig,
+  pub frontend_mgr: FrontendMgrConfig,
+  pub backend_mgr: BackendMgrConfig,
+  pub service_mgr: ServiceMgrConfig,
+  pub db: DbConfig,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ServerConfig {
   pub http_port: u32,
   pub https_port: u32,
+  pub backlog: u32,
+  #[serde(deserialize_with = "deserialize_keep_alive", default)]
+  pub keep_alive: Option<Duration>,
+  pub max_connection_rate: usize,
+  pub max_connections: usize,
+  pub workers: usize,
+  pub max_frame_size: usize,
+}
+
+fn deserialize_keep_alive<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
+where D: Deserializer<'de> {
+  let keep_alive: u64 = Deserialize::deserialize(deserializer)?;
+  if keep_alive == 0 {
+    Ok(None)
+  } else {
+    Ok(Some(Duration::from_secs(keep_alive)))
+  }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FrontendMgrConfig {
   pub frontends: Vec<FrontendConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BackendMgrConfig {
   pub backends: Vec<BackendConfig>,
-  pub db: DbConfig,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ServiceMgrConfig {
+  pub stale_threshold: u32,
+  pub unhealthy_threshold: u32,
 }
 
 #[derive(Debug, Deserialize)]

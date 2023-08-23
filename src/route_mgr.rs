@@ -58,12 +58,12 @@ impl RouteMgr {
     route_mgr
   }
 
-  pub fn add_reverse_route_group(&self, server_id: NodeId, paths: Vec<Path>) {
+  pub fn add_reverse_route_group(&self, service_id: NodeId, paths: Vec<Path>) {
     let path_set = paths.into_iter().collect();
-    let server_id_bytes = <RouteCoder as Coder<NodeId, PathSet>>::encode_key(&server_id);
+    let service_id_bytes = <RouteCoder as Coder<NodeId, PathSet>>::encode_key(&service_id);
     let path_set_bytes = <RouteCoder as Coder<NodeId, PathSet>>::encode_value(&path_set);
-    self.cache.insert(server_id, path_set);
-    self.store.raw().put(server_id_bytes, path_set_bytes).unwrap_or_else(|err| {
+    self.cache.insert(service_id, path_set);
+    self.store.raw().put(service_id_bytes, path_set_bytes).unwrap_or_else(|err| {
       log::warn!("Failed to add reverse route group into store: {:?}", err);
     });
   }
@@ -76,9 +76,9 @@ impl RouteMgr {
     let mut cursor = self.store.new_cursor();
     cursor.seek_to_first();
     while cursor.is_valid() {
-      let server_id = cursor.key().unwrap();
+      let service_id = cursor.key().unwrap();
       let path_set = cursor.value().unwrap();
-      self.cache.insert(server_id, path_set);
+      self.cache.insert(service_id, path_set);
       cursor.next();
     }
   }

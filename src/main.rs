@@ -3,11 +3,10 @@ extern crate serde_derive;
 
 mod config;
 mod db;
-mod http_handler;
+mod handler;
 mod node_mgr;
 mod route_mgr;
 mod topic_mgr;
-mod ws_handler;
 
 use std::sync::Arc;
 
@@ -18,33 +17,35 @@ use actix_web::{
 };
 use actix_web_actors::ws;
 
-use crate::{config::CONFIG, http_handler::HttpHandler, ws_handler::Handler};
-
-const MAX_FRAME_SIZE: usize = 134217728;
+use crate::{
+  config::CONFIG,
+  handler::{http_handler::HttpHandler, ws_handler::Handler},
+};
 
 async fn ws(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
-  let rep =
-    ws::WsResponseBuilder::new(Handler::new(&req), &req, stream).frame_size(MAX_FRAME_SIZE).start();
+  let rep = ws::WsResponseBuilder::new(Handler::new(&req), &req, stream)
+    .frame_size(CONFIG.server.max_frame_size)
+    .start();
   log::info!("ws req: {:?}, rep: {:?}", req, rep);
   rep
 }
 
-async fn assign_frontend(req: HttpRequest) -> HttpResponse {
+async fn pick_frontend(req: HttpRequest) -> HttpResponse {
   let rep = HttpResponse::Ok()
     .content_type(ContentType::json())
     .insert_header(("Access-Control-Allow-Origin", "*"))
     .force_close()
-    .json(HttpHandler::new(&req).assign_frontend());
+    .json(HttpHandler::new(&req).pick_frontend());
   log::info!("http req: {:?}, rep: {:?}", req, rep);
   rep
 }
 
-async fn get_frontends(req: HttpRequest) -> HttpResponse {
+async fn pick_frontends(req: HttpRequest) -> HttpResponse {
   let rep = HttpResponse::Ok()
     .content_type(ContentType::json())
     .insert_header(("Access-Control-Allow-Origin", "*"))
     .force_close()
-    .json(HttpHandler::new(&req).get_frontends());
+    .json(HttpHandler::new(&req).pick_frontends());
   log::info!("http req: {:?}, rep: {:?}", req, rep);
   rep
 }
@@ -68,11 +69,16 @@ async fn main() {
           .expose_any_header()
           .max_age(None),
       )
-      .route("/ws", web::get().to(ws))
-      .route("/$assign-frontend", web::get().to(assign_frontend))
-      .route("/$get-frontends", web::get().to(get_frontends))
+      .route("/$ws", web::get().to(ws))
+      .route("/$pick-frontend", web::get().to(pick_frontend))
+      .route("/$pick-frontends", web::get().to(pick_frontends))
   })
-  .bind(format!("{}:{}", "0.0.0.0", CONFIG.http_port))
+  .backlog(CONFIG.server.backlog)
+  .keep_alive(CONFIG.server.keep_alive)
+  .max_connection_rate(CONFIG.server.max_connection_rate)
+  .max_connections(CONFIG.server.max_connections)
+  .workers(CONFIG.server.workers)
+  .bind(format!("{}:{}", "0.0.0.0", CONFIG.server.http_port))
   .unwrap()
   .run()
   .await

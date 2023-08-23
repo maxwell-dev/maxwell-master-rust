@@ -31,8 +31,8 @@ impl HttpHandler {
     Self { peer_addr: req.peer_addr().unwrap() }
   }
 
-  pub fn assign_frontend(&self) -> AssignFrontendRep {
-    if let Some(frontend) = FRONTEND_MGR.next() {
+  pub fn pick_frontend(&self) -> AssignFrontendRep {
+    if let Some(frontend) = FRONTEND_MGR.pick() {
       let ip = if self.is_lan() { frontend.private_ip } else { frontend.public_ip };
       AssignFrontendRep {
         code: 0,
@@ -42,16 +42,21 @@ impl HttpHandler {
     } else {
       AssignFrontendRep {
         code: 1,
-        desc: Some(format!("Failed to find an available frontend.")),
+        desc: Some(format!("Failed to pick an available frontend.")),
         endpoint: None,
       }
     }
   }
 
-  pub fn get_frontends(&self) -> GetFrontendsRep {
+  pub fn pick_frontends(&self) -> GetFrontendsRep {
+    let is_lan = self.is_lan();
     let mut endpoints = vec![];
     for frontend in FRONTEND_MGR.iter() {
-      endpoints.push(format!("{}:{}", frontend.public_ip, frontend.http_port))
+      if is_lan {
+        endpoints.push(format!("{}:{}", frontend.private_ip, frontend.http_port))
+      } else {
+        endpoints.push(format!("{}:{}", frontend.public_ip, frontend.http_port))
+      }
     }
     GetFrontendsRep { code: 0, desc: None, endpoints }
   }
