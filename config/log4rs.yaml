@@ -30,7 +30,7 @@ appenders:
 # Set the default logging level to "info" and attach the "stdout" appender
 # and the "file" appender to the root
 root:
-  level: info
+  level: debug
   appenders:
     - console
     - file

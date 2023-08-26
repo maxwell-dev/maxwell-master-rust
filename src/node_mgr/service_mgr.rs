@@ -3,7 +3,10 @@ use std::{borrow::Borrow, fmt::Debug, net::IpAddr};
 use ahash::RandomState as AHasher;
 use bytes::{Bytes, BytesMut};
 use chrono::prelude::*;
-use dashmap::{mapref::one::Ref, DashMap};
+use dashmap::{
+  mapref::{entry::Entry, one::Ref},
+  DashMap,
+};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use seriesdb::{
@@ -128,19 +131,21 @@ impl ServiceMgr {
 
   #[inline]
   pub fn get<'a>(&'a self, id: &NodeId) -> Option<ServiceRef<'a>> {
-    if let Some(service) = self.cache.get(id) {
-      if Utc::now().timestamp() as u32 - service.active_at > CONFIG.service_mgr.stale_threshold {
-        self.cache.remove(id);
-        self
-          .store
-          .delete(id)
-          .unwrap_or_else(|err| log::warn!("Failed to remove service: err: {:?}", err));
-        None
-      } else {
-        Some(service)
+    match self.cache.entry(id.clone()) {
+      Entry::Occupied(entry) => {
+        let service = entry.get();
+        if Utc::now().timestamp() as u32 - service.active_at > CONFIG.service_mgr.stale_threshold {
+          entry.remove();
+          self
+            .store
+            .delete(id)
+            .unwrap_or_else(|err| log::warn!("Failed to remove service: err: {:?}", err));
+          None
+        } else {
+          Some(entry.into_ref().downgrade())
+        }
       }
-    } else {
-      None
+      Entry::Vacant(_) => None,
     }
   }
 
