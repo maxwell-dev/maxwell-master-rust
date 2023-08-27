@@ -42,15 +42,20 @@ impl Node for Service {
 
 impl Service {
   pub fn new(private_ip: IpAddr, http_port: u32) -> Self {
-    Service { id: build_node_id(private_ip, http_port), http_port, private_ip, active_at: 0 }
+    Service {
+      id: build_node_id(private_ip, http_port),
+      http_port,
+      private_ip,
+      active_at: Utc::now().timestamp() as u32,
+    }
   }
 
   #[inline]
   pub fn is_healthy(&self) -> bool {
     if Utc::now().timestamp() as u32 - self.active_at > CONFIG.service_mgr.unhealthy_threshold {
-      true
-    } else {
       false
+    } else {
+      true
     }
   }
 }

@@ -1,6 +1,7 @@
 use std::net::{IpAddr, SocketAddr};
 
 use actix_web::HttpRequest;
+use maxwell_protocol::{self, *};
 use serde::Serialize;
 
 use crate::node_mgr::*;
@@ -35,13 +36,13 @@ impl HttpHandler {
     if let Some(frontend) = FRONTEND_MGR.pick() {
       let ip = if self.is_lan() { frontend.private_ip } else { frontend.public_ip };
       AssignFrontendRep {
-        code: 0,
+        code: ErrorCode::Ok as i32,
         desc: None,
         endpoint: Some(format!("{}:{}", ip, frontend.http_port)),
       }
     } else {
       AssignFrontendRep {
-        code: 1,
+        code: ErrorCode::FailedToPickFrontend as i32,
         desc: Some(format!("Failed to pick an available frontend.")),
         endpoint: None,
       }
@@ -58,7 +59,7 @@ impl HttpHandler {
         endpoints.push(format!("{}:{}", frontend.public_ip, frontend.http_port))
       }
     }
-    GetFrontendsRep { code: 0, desc: None, endpoints }
+    GetFrontendsRep { code: ErrorCode::Ok as i32, desc: None, endpoints }
   }
 
   #[inline]

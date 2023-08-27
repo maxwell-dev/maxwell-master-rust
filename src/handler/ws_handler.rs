@@ -51,7 +51,7 @@ impl HandlerInner {
       ProtocolMsg::LocateTopicReq(req) => self.handle_locate_topic_req(req),
       ProtocolMsg::ResolveIpReq(req) => self.handle_resolve_ip_req(req),
       _ => maxwell_protocol::ErrorRep {
-        code: 1,
+        code: ErrorCode::UnknownMsg as i32,
         desc: format!("Received unknown msg: {:?}", protocol_msg),
         r#ref: get_ref(&protocol_msg),
       }
@@ -63,9 +63,9 @@ impl HandlerInner {
     log::debug!("received internal msg: {:?}", protocol_msg);
     match &protocol_msg {
       _ => maxwell_protocol::ErrorRep {
-        code: 1,
+        code: ErrorCode::UnknownMsg as i32,
         desc: format!("Received unknown msg: {:?}", protocol_msg),
-        r#ref: 0,
+        r#ref: get_ref(&protocol_msg),
       }
       .into_enum(),
     }
@@ -97,7 +97,7 @@ impl HandlerInner {
       maxwell_protocol::RegisterFrontendRep { r#ref: req.r#ref }.into_enum()
     } else {
       maxwell_protocol::ErrorRep {
-        code: 1,
+        code: ErrorCode::NotAllowedToRegisterFrontend as i32,
         desc: format!("Not allowed to register this frontend: {:?}", node_id),
         r#ref: req.r#ref,
       }
@@ -116,7 +116,7 @@ impl HandlerInner {
       maxwell_protocol::RegisterBackendRep { r#ref: req.r#ref }.into_enum()
     } else {
       maxwell_protocol::ErrorRep {
-        code: 1,
+        code: ErrorCode::NotAllowedToRegisterBackend as i32,
         desc: format!("Not allowed to register this backend: {:?}", node_id),
         r#ref: req.r#ref,
       }
@@ -203,7 +203,7 @@ impl HandlerInner {
       .into_enum()
     } else {
       maxwell_protocol::ErrorRep {
-        code: 1,
+        code: ErrorCode::FailedToPickFrontend as i32,
         desc: format!("Failed to find an available frontend."),
         r#ref: req.r#ref,
       }
@@ -225,7 +225,7 @@ impl HandlerInner {
           .into_enum()
         } else {
           maxwell_protocol::ErrorRep {
-            code: 1,
+            code: ErrorCode::FailedToLocateTopic as i32,
             desc: format!(
               "Failed to find the backend: topic: {}, backend_id: {}",
               req.topic, backend_id
@@ -251,7 +251,7 @@ impl HandlerInner {
             .into_enum(),
             Err(err) => {
               return maxwell_protocol::ErrorRep {
-                code: 1,
+                code: ErrorCode::FailedToLocateTopic as i32,
                 desc: format!("Failed to assign topic: {}, err: {}", req.topic, err),
                 r#ref: req.r#ref,
               }
@@ -260,7 +260,7 @@ impl HandlerInner {
           }
         } else {
           maxwell_protocol::ErrorRep {
-            code: 2,
+            code: ErrorCode::FailedToLocateTopic as i32,
             desc: format!("Failed to find an available backend: topic: {}", req.topic),
             r#ref: req.r#ref,
           }
@@ -268,7 +268,7 @@ impl HandlerInner {
         }
       }
       Err(err) => maxwell_protocol::ErrorRep {
-        code: 3,
+        code: ErrorCode::FailedToLocateTopic as i32,
         desc: format!("Failed to locate topic: {}, err: {}", req.topic, err),
         r#ref: req.r#ref,
       }
