@@ -17,6 +17,10 @@ pub struct Config {
 pub struct ServerConfig {
   pub http_port: u32,
   pub https_port: u32,
+  #[serde(deserialize_with = "deserialize_path")]
+  pub cert_file: String,
+  #[serde(deserialize_with = "deserialize_path")]
+  pub key_file: String,
   pub backlog: u32,
   #[serde(deserialize_with = "deserialize_keep_alive", default)]
   pub keep_alive: Option<Duration>,

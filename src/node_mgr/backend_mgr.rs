@@ -42,13 +42,14 @@ pub type BackendIter<'a> = NodeIter<'a, Backend>;
 pub struct BackendMgr {
   pub(crate) backends: DashMap<NodeId, Backend, AHasher>,
   pub(crate) backend_ids: Vec<NodeId>,
+  pub(crate) checksum: u32,
 }
 
 impl BackendMgr {
   #[inline]
   pub(crate) fn new() -> Self {
     let backends = DashMap::with_capacity_and_hasher(64, AHasher::default());
-    let mut backend_mgr = BackendMgr { backends, backend_ids: Vec::with_capacity(64) };
+    let mut backend_mgr = BackendMgr { backends, backend_ids: Vec::with_capacity(64), checksum: 0 };
     backend_mgr.initialize();
     backend_mgr
   }
@@ -82,6 +83,11 @@ impl BackendMgr {
   }
 
   #[inline]
+  pub fn checksum(&self) -> u32 {
+    self.checksum
+  }
+
+  #[inline]
   fn initialize(&mut self) {
     CONFIG.backend_mgr.backends.iter().for_each(|backend_config| {
       let backend = Backend::new(backend_config.private_ip, backend_config.http_port);
@@ -89,6 +95,7 @@ impl BackendMgr {
       self.backends.insert(backend.id.clone(), backend.clone());
     });
     self.backend_ids.sort();
+    self.checksum = crc32fast::hash(format!("{:?}", self.backend_ids).as_bytes());
   }
 }
 

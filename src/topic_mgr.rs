@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::{num::NonZeroU32, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Result;
 use bytes::{Bytes, BytesMut};
@@ -47,9 +47,9 @@ impl Coder<Topic, NodeId> for TopicCoder {
 #[derive(Clone)]
 pub struct TopicWeighter;
 
-impl Weighter<String, (), String> for TopicWeighter {
-  fn weight(&self, key: &String, _qey: &(), val: &String) -> NonZeroU32 {
-    NonZeroU32::new((key.len() + val.len()) as u32).unwrap()
+impl Weighter<String, String> for TopicWeighter {
+  fn weight(&self, key: &String, val: &String) -> u32 {
+    (key.len() + val.len()) as u32
   }
 }
 

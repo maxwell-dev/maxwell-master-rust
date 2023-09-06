@@ -10,6 +10,7 @@ use actix::{prelude::*, Actor};
 use actix_web::HttpRequest;
 use actix_web_actors::ws;
 use ahash::{AHasher, HashMap};
+use chrono::Utc;
 use maxwell_protocol::{self, *};
 
 use crate::route_mgr::*;
@@ -47,6 +48,8 @@ impl HandlerInner {
       ProtocolMsg::RegisterServiceReq(req) => self.handle_register_service_req(req),
       ProtocolMsg::SetRoutesReq(req) => self.handle_set_routes_req(req),
       ProtocolMsg::GetRoutesReq(req) => self.handle_get_routes_req(req),
+      ProtocolMsg::GetTopicDistChecksumReq(req) => self.handle_get_topic_dist_checksum_req(req),
+      ProtocolMsg::GetRouteDistChecksumReq(req) => self.handle_get_route_dist_checksum_req(req),
       ProtocolMsg::PickFrontendReq(req) => self.handle_pick_frontend_req(req),
       ProtocolMsg::LocateTopicReq(req) => self.handle_locate_topic_req(req),
       ProtocolMsg::ResolveIpReq(req) => self.handle_resolve_ip_req(req),
@@ -148,6 +151,7 @@ impl HandlerInner {
   fn handle_get_routes_req(
     self: Rc<Self>, req: maxwell_protocol::GetRoutesReq,
   ) -> maxwell_protocol::ProtocolMsg {
+    let mut stale_services = vec![];
     let mut route_groups = HashMap::default();
 
     for reverse_route_group in ROUTE_MGR.reverse_route_group_iter() {
@@ -155,7 +159,10 @@ impl HandlerInner {
 
       let is_healthy = match SERVICE_MGR.get(endpoint) {
         Some(service) => service.is_healthy(),
-        None => continue,
+        None => {
+          stale_services.push(endpoint.clone());
+          continue;
+        }
       };
 
       let path_set = reverse_route_group.value();
@@ -174,11 +181,58 @@ impl HandlerInner {
       }
     }
 
+    for service_id in &stale_services {
+      SERVICE_MGR.remove(service_id);
+      ROUTE_MGR.remove_reverse_route_group(service_id);
+    }
+
     maxwell_protocol::GetRoutesRep {
       route_groups: route_groups.values().cloned().collect(),
       r#ref: req.r#ref,
     }
     .into_enum()
+  }
+
+  fn handle_get_topic_dist_checksum_req(
+    self: Rc<Self>, req: maxwell_protocol::GetTopicDistChecksumReq,
+  ) -> maxwell_protocol::ProtocolMsg {
+    maxwell_protocol::GetTopicDistChecksumRep { checksum: BACKEND_MGR.checksum(), r#ref: req.r#ref }
+      .into_enum()
+  }
+
+  fn handle_get_route_dist_checksum_req(
+    self: Rc<Self>, req: maxwell_protocol::GetRouteDistChecksumReq,
+  ) -> maxwell_protocol::ProtocolMsg {
+    let mut stale_services = vec![];
+    let mut is_every_service_healthy = true;
+    for reverse_route_group in ROUTE_MGR.reverse_route_group_iter() {
+      if let Some(service) = SERVICE_MGR.get(reverse_route_group.key()) {
+        if !service.is_healthy() {
+          is_every_service_healthy = false;
+          break;
+        }
+      } else {
+        stale_services.push(reverse_route_group.key().clone());
+        is_every_service_healthy = false;
+        break;
+      }
+    }
+
+    for service_id in &stale_services {
+      SERVICE_MGR.remove(service_id);
+      ROUTE_MGR.remove_reverse_route_group(&service_id);
+    }
+
+    let seed = format!(
+      "{},{}",
+      ROUTE_MGR.version(),
+      if is_every_service_healthy { 1 } else { Utc::now().timestamp_millis() }
+    );
+    let mut hasher = crc32fast::Hasher::new();
+    hasher.update(seed.as_bytes());
+    let checksum = hasher.finalize();
+
+    maxwell_protocol::GetRouteDistChecksumRep { checksum, r#ref: req.r#ref }.into_enum()
   }
 
   #[inline(always)]

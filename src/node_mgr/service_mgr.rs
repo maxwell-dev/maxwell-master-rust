@@ -116,11 +116,14 @@ impl ServiceMgr {
       .unwrap_or_else(|err| log::warn!("Failed to add service: err: {:?}", err));
   }
 
-  // #[inline]
-  // pub fn remove(&self, id: &NodeId) {
-  //   self.cache.remove(id);
-  //   self.store.delete(id).unwrap_or_else(|err| log::warn!("Failed to remove service: err: {:?}", err));
-  // }
+  #[inline]
+  pub fn remove(&self, id: &NodeId) {
+    self.cache.remove(id);
+    self
+      .store
+      .delete(id)
+      .unwrap_or_else(|err| log::warn!("Failed to remove service: err: {:?}", err));
+  }
 
   #[inline]
   pub fn activate(&self, id: &NodeId) {

@@ -1,8 +1,10 @@
 [server]
 backlog = 10000
+cert_file = "certificates/localhost.crt"
 http_port = 8081
 https_port = 1443
 keep_alive = 0
+key_file = "certificates/localhost.key"
 max_connection_rate = 1000
 max_connections = 10000
 max_frame_size = 134217728

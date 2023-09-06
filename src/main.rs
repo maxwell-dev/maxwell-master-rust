@@ -8,14 +8,17 @@ mod node_mgr;
 mod route_mgr;
 mod topic_mgr;
 
-use std::sync::Arc;
+use std::{fs::File, io::BufReader};
 
 use actix_cors::Cors;
 use actix_web::{
   http::header::ContentType, middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer,
-  Result,
 };
 use actix_web_actors::ws;
+use anyhow::{anyhow, Result};
+use futures::future;
+use rustls::{Certificate, PrivateKey, ServerConfig};
+use rustls_pemfile::{certs, pkcs8_private_keys};
 
 use crate::{
   config::CONFIG,
@@ -51,14 +54,15 @@ async fn pick_frontends(req: HttpRequest) -> HttpResponse {
 }
 
 #[actix_web::main]
-async fn main() {
-  log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
+async fn main() -> Result<()> {
+  log4rs::init_file("config/log4rs.yaml", Default::default())?;
+  future::try_join(create_http_server(false), create_http_server(true)).await?;
+  Ok(())
+}
 
-  let store_handle = Arc::new(());
-
-  HttpServer::new(move || {
+async fn create_http_server(is_https: bool) -> Result<()> {
+  let http_server = HttpServer::new(move || {
     App::new()
-      .app_data(store_handle.clone())
       .wrap(middleware::Logger::default())
       .wrap(
         Cors::default()
@@ -77,10 +81,35 @@ async fn main() {
   .keep_alive(CONFIG.server.keep_alive)
   .max_connection_rate(CONFIG.server.max_connection_rate)
   .max_connections(CONFIG.server.max_connections)
-  .workers(CONFIG.server.workers)
-  .bind(format!("{}:{}", "0.0.0.0", CONFIG.server.http_port))
-  .unwrap()
+  .workers(CONFIG.server.workers);
+
+  if is_https {
+    http_server.bind_rustls_021(
+      format!("{}:{}", "0.0.0.0", CONFIG.server.https_port),
+      create_tls_config()?,
+    )?
+  } else {
+    http_server.bind(format!("{}:{}", "0.0.0.0", CONFIG.server.http_port))?
+  }
   .run()
   .await
-  .unwrap();
+  .map_err(|err| anyhow!("Failed to run the server: err: {:?}", err))
+}
+
+fn create_tls_config() -> Result<ServerConfig> {
+  let cert_file = File::open(CONFIG.server.cert_file.clone())?;
+  let key_file = File::open(CONFIG.server.key_file.clone())?;
+
+  let cert_buf = &mut BufReader::new(cert_file);
+  let key_buf = &mut BufReader::new(key_file);
+
+  let cert_chain = certs(cert_buf)?.into_iter().map(Certificate).collect();
+  let mut keys = pkcs8_private_keys(key_buf)?;
+
+  Ok(
+    ServerConfig::builder()
+      .with_safe_defaults()
+      .with_no_client_auth()
+      .with_single_cert(cert_chain, PrivateKey(keys.remove(0)))?,
+  )
 }
