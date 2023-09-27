@@ -21,8 +21,8 @@ tokio = {version = "1.32.0", features = ["full"]}
 ahash = "0.8.3"
 anyhow = "1.0.75"
 bincode = "1.3.3"
-bytes = "1.4.0"
-chrono = "0.4.28"
+bytes = "1.5.0"
+chrono = "0.4.31"
 crc32fast = "1.3.2"
 dashmap = "5.5.3"
 once_cell = "1.18.0"
@@ -31,5 +31,5 @@ rand = "0.8.5"
 serde = "1.0.188"
 serde_derive = "1.0.188"
 
-maxwell-protocol = {git = "https://github.com/maxwell-dev/maxwell-protocol-rust.git", tag = "v0.15.2"}
+maxwell-protocol = {git = "https://github.com/maxwell-dev/maxwell-protocol-rust.git", tag = "v0.15.3"}
 seriesdb = {git = "https://github.com/xuchaoqian/seriesdb-rust.git", tag = "v0.9.5"}
