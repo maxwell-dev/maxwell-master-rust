@@ -32,4 +32,4 @@ serde = "1.0.188"
 serde_derive = "1.0.188"
 
 maxwell-protocol = {git = "https://github.com/maxwell-dev/maxwell-protocol-rust.git", tag = "v0.15.3"}
-seriesdb = {git = "https://github.com/xuchaoqian/seriesdb-rust.git", tag = "v0.10.0"}
+seriesdb = {git = "https://github.com/xuchaoqian/seriesdb-rust.git", tag = "v0.10.1"}
