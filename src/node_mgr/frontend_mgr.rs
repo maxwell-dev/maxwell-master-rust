@@ -12,6 +12,7 @@ use crate::config::CONFIG;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Frontend {
   pub(crate) id: String,
+  pub(crate) domain: String,
   pub(crate) http_port: u32,
   pub(crate) https_port: u32,
   pub(crate) public_ip: IpAddr,
@@ -20,9 +21,12 @@ pub struct Frontend {
 }
 
 impl Frontend {
-  pub fn new(public_ip: IpAddr, private_ip: IpAddr, http_port: u32, https_port: u32) -> Self {
+  pub fn new(
+    domain: String, public_ip: IpAddr, private_ip: IpAddr, http_port: u32, https_port: u32,
+  ) -> Self {
     Frontend {
       id: build_node_id(private_ip, http_port),
+      domain,
       public_ip,
       private_ip,
       http_port,
@@ -95,6 +99,7 @@ impl FrontendMgr {
   fn initialize(&self) {
     CONFIG.frontend_mgr.frontends.iter().for_each(|frontend_config| {
       let frontend = Frontend::new(
+        frontend_config.domain.clone(),
         frontend_config.public_ip,
         frontend_config.private_ip,
         frontend_config.http_port,

@@ -23,8 +23,15 @@ pub struct GetFrontendsRep {
   endpoints: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AddrType {
+  Loopback,
+  Private,
+  Public,
+}
+
 pub struct HttpHandler {
-  is_lan: bool,
+  addr_type: AddrType,
   is_https: bool,
 }
 
@@ -32,7 +39,11 @@ impl HttpHandler {
   #[inline]
   pub fn new(req: &HttpRequest) -> Self {
     Self {
-      is_lan: if let Some(peer_addr) = &req.peer_addr() { Self::is_lan(peer_addr) } else { false },
+      addr_type: if let Some(peer_addr) = &req.peer_addr() {
+        Self::detect_addr_type(peer_addr)
+      } else {
+        AddrType::Public
+      },
       is_https: req.connection_info().scheme() == "https",
     }
   }
@@ -64,23 +75,37 @@ impl HttpHandler {
   }
 
   #[inline]
-  fn is_lan(peer_addr: &SocketAddr) -> bool {
+  fn detect_addr_type(peer_addr: &SocketAddr) -> AddrType {
     match peer_addr.ip() {
       IpAddr::V4(ip) => {
-        if ip.is_private() {
-          true
+        if ip.is_loopback() {
+          AddrType::Loopback
+        } else if ip.is_private() {
+          AddrType::Private
         } else {
-          false
+          AddrType::Public
         }
       }
-      IpAddr::V6(_) => false,
+      IpAddr::V6(_) => AddrType::Public,
     }
   }
 
   #[inline]
   fn build_endpoint(&self, frontend: &Frontend) -> String {
-    let ip = if self.is_lan { frontend.private_ip } else { frontend.public_ip };
-    let port = if self.is_https { frontend.https_port } else { frontend.http_port };
-    format!("{}:{}", ip, port)
+    if self.addr_type == AddrType::Loopback {
+      if self.is_https {
+        format!("{}:{}", frontend.domain, frontend.https_port)
+      } else {
+        format!("{}:{}", frontend.private_ip, frontend.http_port)
+      }
+    } else if self.addr_type == AddrType::Private {
+      format!("{}:{}", frontend.private_ip, frontend.http_port)
+    } else {
+      if self.is_https {
+        format!("{}:{}", frontend.domain, frontend.https_port)
+      } else {
+        format!("{}:{}", frontend.public_ip, frontend.http_port)
+      }
+    }
   }
 }
