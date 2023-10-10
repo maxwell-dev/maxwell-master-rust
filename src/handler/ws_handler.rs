@@ -96,6 +96,9 @@ impl HandlerInner {
     let node_id = build_node_id(self.peer_addr.ip(), req.http_port);
     self.node_type.set(NodeType::Frontend);
     *self.node_id.borrow_mut() = Some(node_id.clone());
+
+    log::info!("Registering frontend: from: {:?}, req: {:?}", node_id, req);
+
     if FRONTEND_MGR.get(&node_id).is_some() {
       maxwell_protocol::RegisterFrontendRep { r#ref: req.r#ref }.into_enum()
     } else {
@@ -115,6 +118,9 @@ impl HandlerInner {
     self.node_type.set(NodeType::Backend);
     let node_id = build_node_id(self.peer_addr.ip(), req.http_port);
     *self.node_id.borrow_mut() = Some(node_id.clone());
+
+    log::info!("Registering backend: from: {:?}, req: {:?}", node_id, req);
+
     if BACKEND_MGR.get(&node_id).is_some() {
       maxwell_protocol::RegisterBackendRep { r#ref: req.r#ref }.into_enum()
     } else {
@@ -134,6 +140,9 @@ impl HandlerInner {
     self.node_type.set(NodeType::Service);
     let service = Service::new(self.peer_addr.ip(), req.http_port);
     *self.node_id.borrow_mut() = Some(service.id().clone());
+
+    log::info!("Registering service: from: {:?}, req: {:?}", service.id(), req);
+
     SERVICE_MGR.add(service);
     maxwell_protocol::RegisterServiceRep { r#ref: req.r#ref }.into_enum()
   }
@@ -143,6 +152,9 @@ impl HandlerInner {
     self: Rc<Self>, req: maxwell_protocol::SetRoutesReq,
   ) -> maxwell_protocol::ProtocolMsg {
     let service_id = self.node_id.borrow().as_ref().unwrap_or(&"unknown".to_owned()).clone();
+
+    log::info!("Setting routes: from: {:?}, req : {:?}", service_id, req);
+
     ROUTE_MGR.add_reverse_route_group(service_id, req.paths);
     maxwell_protocol::SetRoutesRep { r#ref: req.r#ref }.into_enum()
   }
