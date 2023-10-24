@@ -57,6 +57,8 @@ impl HttpHandler {
         endpoint: Some(self.build_endpoint(&frontend)),
       }
     } else {
+      log::error!("Failed to pick an available frontend.");
+
       AssignFrontendRep {
         code: ErrorCode::FailedToPickFrontend as i32,
         desc: Some(format!("Failed to pick an available frontend.")),
