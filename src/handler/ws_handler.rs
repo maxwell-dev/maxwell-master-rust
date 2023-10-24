@@ -78,14 +78,7 @@ impl HandlerInner {
   fn handle_ping_req(
     self: Rc<Self>, req: maxwell_protocol::PingReq,
   ) -> maxwell_protocol::ProtocolMsg {
-    if let Some(node_id) = self.node_id.borrow().as_ref() {
-      match self.node_type.get() {
-        NodeType::Frontend => FRONTEND_MGR.activate(node_id),
-        NodeType::Backend => BACKEND_MGR.activate(node_id),
-        NodeType::Service => SERVICE_MGR.activate(node_id),
-        _ => {}
-      }
-    }
+    self.activate_node();
     maxwell_protocol::PingRep { r#ref: req.r#ref }.into_enum()
   }
 
@@ -151,12 +144,23 @@ impl HandlerInner {
   fn handle_set_routes_req(
     self: Rc<Self>, req: maxwell_protocol::SetRoutesReq,
   ) -> maxwell_protocol::ProtocolMsg {
-    let service_id = self.node_id.borrow().as_ref().unwrap_or(&"unknown".to_owned()).clone();
+    if let Some(service_id) = self.node_id.borrow().as_ref() {
+      log::info!("Setting routes: from: {:?}, req : {:?}", service_id, req);
 
-    log::info!("Setting routes: from: {:?}, req : {:?}", service_id, req);
-
-    ROUTE_MGR.add_reverse_route_group(service_id, req.paths);
-    maxwell_protocol::SetRoutesRep { r#ref: req.r#ref }.into_enum()
+      ROUTE_MGR.add_reverse_route_group(service_id.clone(), req.paths);
+      maxwell_protocol::SetRoutesRep { r#ref: req.r#ref }.into_enum()
+    } else {
+      maxwell_protocol::ErrorRep {
+        code: ErrorCode::MasterError as i32,
+        desc: format!(
+          "The related service has not registered: ip: {:?}, req: {:?}",
+          self.peer_addr.ip(),
+          req
+        ),
+        r#ref: req.r#ref,
+      }
+      .into_enum()
+    }
   }
 
   #[inline(always)]
@@ -349,6 +353,18 @@ impl HandlerInner {
     maxwell_protocol::ResolveIpRep { ip: self.peer_addr.ip().to_string(), r#ref: req.r#ref }
       .into_enum()
   }
+
+  #[inline(always)]
+  fn activate_node(self: Rc<Self>) {
+    if let Some(node_id) = self.node_id.borrow().as_ref() {
+      match self.node_type.get() {
+        NodeType::Frontend => FRONTEND_MGR.activate(node_id),
+        NodeType::Backend => BACKEND_MGR.activate(node_id),
+        NodeType::Service => SERVICE_MGR.activate(node_id),
+        _ => {}
+      }
+    }
+  }
 }
 
 pub struct Handler {
@@ -359,16 +375,16 @@ impl Actor for Handler {
   type Context = ws::WebsocketContext<Self>;
 
   fn started(&mut self, _ctx: &mut Self::Context) {
-    log::info!("Handler actor started: id: {:?}", self.inner.id);
+    log::debug!("Handler actor started: id: {:?}", self.inner.id);
   }
 
   fn stopping(&mut self, _ctx: &mut Self::Context) -> Running {
-    log::info!("Handler actor stopping: id: {:?}", self.inner.id);
+    log::debug!("Handler actor stopping: id: {:?}", self.inner.id);
     Running::Stop
   }
 
   fn stopped(&mut self, _ctx: &mut Self::Context) {
-    log::info!("Handler actor stopped: id: {:?}", self.inner.id);
+    log::debug!("Handler actor stopped: id: {:?}", self.inner.id);
   }
 }
 
@@ -376,14 +392,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Handler {
   fn handle(&mut self, ws_msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
     match ws_msg {
       Ok(ws::Message::Ping(ws_msg)) => {
-        if let Some(node_id) = self.inner.node_id.borrow().as_ref() {
-          match self.inner.node_type.get() {
-            NodeType::Frontend => FRONTEND_MGR.activate(node_id),
-            NodeType::Backend => BACKEND_MGR.activate(node_id),
-            NodeType::Service => SERVICE_MGR.activate(node_id),
-            _ => {}
-          }
-        }
+        self.inner.clone().activate_node();
         ctx.pong(&ws_msg);
       }
       Ok(ws::Message::Pong(_)) => (),

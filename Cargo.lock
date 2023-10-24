@@ -1249,8 +1249,8 @@ dependencies = [
 
 [[package]]
 name = "maxwell-protocol"
-version = "0.15.3"
-source = "git+https://github.com/maxwell-dev/maxwell-protocol-rust.git?tag=v0.15.3#0e6d76de109e3ea737c433134e9fe2f4b2496282"
+version = "0.18.0"
+source = "git+https://github.com/maxwell-dev/maxwell-protocol-rust.git?tag=v0.18.0#39a7127901fad248d9dfdd3d26058234794a0b69"
 dependencies = [
  "actix",
  "bytes",
