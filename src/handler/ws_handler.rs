@@ -307,6 +307,8 @@ impl HandlerInner {
   ) -> maxwell_protocol::ProtocolMsg {
     match TOPIC_MGR.locate(&req.topic) {
       Ok(Some(backend_id)) => {
+        log::debug!("Found the backend: topic: {}, backend_id: {}", req.topic, backend_id);
+
         if let Some(backend) = BACKEND_MGR.get(&backend_id) {
           maxwell_protocol::LocateTopicRep {
             endpoint: format!("{}:{}", backend.private_ip, backend.http_port),
@@ -339,6 +341,8 @@ impl HandlerInner {
           let index = hash % ids.len() as u64;
           ids.get(index as usize)
         }) {
+          log::debug!("Picked the backend: topic: {}, backend_id: {}", req.topic, backend.id());
+
           match TOPIC_MGR.assign(req.topic.clone(), backend.id().clone()) {
             Ok(()) => maxwell_protocol::LocateTopicRep {
               endpoint: format!("{}:{}", backend.private_ip, backend.http_port),

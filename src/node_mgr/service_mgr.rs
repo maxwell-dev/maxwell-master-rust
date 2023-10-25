@@ -88,18 +88,18 @@ impl Coder<NodeId, Service> for ServiceCoder {
 }
 
 pub type ServiceRef<'a> = Ref<'a, NodeId, Service, AHasher>;
-type Store = TableEnhanced<NormalTable, NodeId, Service, ServiceCoder>;
+type ServiceStore = TableEnhanced<NormalTable, NodeId, Service, ServiceCoder>;
 
 pub struct ServiceMgr {
   pub(crate) cache: DashMap<NodeId, Service, AHasher>,
-  pub(crate) store: Store,
+  pub(crate) service_store: ServiceStore,
 }
 
 impl ServiceMgr {
   #[inline]
-  pub(crate) fn new(store: Store) -> Self {
+  pub(crate) fn new(service_store: ServiceStore) -> Self {
     let cache = DashMap::with_capacity_and_hasher(64, AHasher::default());
-    let service_mgr = ServiceMgr { cache, store };
+    let service_mgr = ServiceMgr { cache, service_store };
     service_mgr.recover();
     service_mgr
   }
@@ -110,7 +110,7 @@ impl ServiceMgr {
     let service_bytes = <ServiceCoder as Coder<NodeId, Service>>::encode_value(&service);
     self.cache.insert(service.id.clone(), service);
     self
-      .store
+      .service_store
       .raw()
       .put(id_bytes, service_bytes)
       .unwrap_or_else(|err| log::warn!("Failed to add service: err: {:?}", err));
@@ -120,7 +120,7 @@ impl ServiceMgr {
   pub fn remove(&self, id: &NodeId) {
     self.cache.remove(id);
     self
-      .store
+      .service_store
       .delete(id)
       .unwrap_or_else(|err| log::warn!("Failed to remove service: err: {:?}", err));
   }
@@ -131,7 +131,7 @@ impl ServiceMgr {
       let now = Utc::now().timestamp() as u32;
       service.active_at = now;
       self
-        .store
+        .service_store
         .put(id, &*service)
         .unwrap_or_else(|err| log::warn!("Failed to activate node: err: {:?}", err));
     }
@@ -145,7 +145,7 @@ impl ServiceMgr {
         if Utc::now().timestamp() as u32 - service.active_at > CONFIG.service_mgr.stale_threshold {
           entry.remove();
           self
-            .store
+            .service_store
             .delete(id)
             .unwrap_or_else(|err| log::warn!("Failed to remove service: err: {:?}", err));
           None
@@ -159,7 +159,7 @@ impl ServiceMgr {
 
   #[inline]
   fn recover(&self) {
-    let mut cursor = self.store.new_cursor();
+    let mut cursor = self.service_store.new_cursor();
     cursor.seek_to_first();
     while cursor.is_valid() {
       let id = cursor.key().unwrap();
@@ -171,7 +171,11 @@ impl ServiceMgr {
 }
 
 pub static SERVICE_MGR: Lazy<ServiceMgr> = Lazy::new(|| {
-  ServiceMgr::new(DB.open_table("services").unwrap().enhance::<NodeId, Service, ServiceCoder>())
+  ServiceMgr::new(
+    DB.open_table("node_mgr.service_mgr.services")
+      .unwrap()
+      .enhance::<NodeId, Service, ServiceCoder>(),
+  )
 });
 
 #[cfg(test)]
