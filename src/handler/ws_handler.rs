@@ -194,6 +194,7 @@ impl HandlerInner {
       let is_healthy = match SERVICE_MGR.get(endpoint) {
         Some(service) => service.is_healthy(),
         None => {
+          log::info!("Found a stale service: id: {}", endpoint);
           stale_services.push(endpoint.clone());
           continue;
         }
@@ -242,10 +243,12 @@ impl HandlerInner {
     for reverse_route_group in ROUTE_MGR.reverse_route_group_iter() {
       if let Some(service) = SERVICE_MGR.get(reverse_route_group.key()) {
         if !service.is_healthy() {
+          log::info!("Found an unhealthy service: id: {}", service.id());
           is_every_service_healthy = false;
           break;
         }
       } else {
+        log::info!("Found a stale service: id: {}", reverse_route_group.key());
         stale_services.push(reverse_route_group.key().clone());
         is_every_service_healthy = false;
         break;
