@@ -94,20 +94,20 @@ impl HandlerInner {
   fn handle_register_frontend_req(
     self: Rc<Self>, req: maxwell_protocol::RegisterFrontendReq,
   ) -> maxwell_protocol::ProtocolMsg {
-    let node_id = build_node_id(self.peer_addr.ip(), req.http_port);
+    let frontend_id = build_node_id(self.peer_addr.ip(), req.http_port);
     self.node_type.set(NodeType::Frontend);
-    *self.node_id.borrow_mut() = Some(node_id.clone());
+    *self.node_id.borrow_mut() = Some(frontend_id.clone());
 
-    log::info!("Registering frontend: from: {:?}, req: {:?}", node_id, req);
+    log::info!("Registering frontend: from: {:?}, req: {:?}", frontend_id, req);
 
-    if FRONTEND_MGR.get(&node_id).is_some() {
+    if FRONTEND_MGR.get(&frontend_id).is_some() {
       maxwell_protocol::RegisterFrontendRep { r#ref: req.r#ref }.into_enum()
     } else {
-      log::error!("Not allowed to register this frontend: {:?}", node_id);
+      log::error!("Not allowed to register this frontend: {:?}", frontend_id);
 
       maxwell_protocol::ErrorRep {
         code: ErrorCode::NotAllowedToRegisterFrontend as i32,
-        desc: format!("Not allowed to register this frontend: {:?}", node_id),
+        desc: format!("Not allowed to register this frontend: {:?}", frontend_id),
         r#ref: req.r#ref,
       }
       .into_enum()
@@ -119,19 +119,19 @@ impl HandlerInner {
     self: Rc<Self>, req: maxwell_protocol::RegisterBackendReq,
   ) -> maxwell_protocol::ProtocolMsg {
     self.node_type.set(NodeType::Backend);
-    let node_id = build_node_id(self.peer_addr.ip(), req.http_port);
-    *self.node_id.borrow_mut() = Some(node_id.clone());
+    let backend_id = build_node_id(self.peer_addr.ip(), req.http_port);
+    *self.node_id.borrow_mut() = Some(backend_id.clone());
 
-    log::info!("Registering backend: from: {:?}, req: {:?}", node_id, req);
+    log::info!("Registering backend: from: {:?}, req: {:?}", backend_id, req);
 
-    if BACKEND_MGR.get(&node_id).is_some() {
+    if BACKEND_MGR.get(&backend_id).is_some() {
       maxwell_protocol::RegisterBackendRep { r#ref: req.r#ref }.into_enum()
     } else {
-      log::error!("Not allowed to register this backend: {:?}", node_id);
+      log::error!("Not allowed to register this backend: {:?}", backend_id);
 
       maxwell_protocol::ErrorRep {
         code: ErrorCode::NotAllowedToRegisterBackend as i32,
-        desc: format!("Not allowed to register this backend: {:?}", node_id),
+        desc: format!("Not allowed to register this backend: {:?}", backend_id),
         r#ref: req.r#ref,
       }
       .into_enum()
@@ -158,8 +158,18 @@ impl HandlerInner {
   ) -> maxwell_protocol::ProtocolMsg {
     if let Some(service_id) = self.node_id.borrow().as_ref() {
       log::info!("Setting routes: from: {:?}, req : {:?}", service_id, req);
-
-      ROUTE_MGR.add_reverse_route_group(service_id.clone(), req.paths);
+      let pb = PathBundle {
+        ws_paths: req.ws_paths.into_iter().collect(),
+        get_paths: req.get_paths.into_iter().collect(),
+        post_paths: req.post_paths.into_iter().collect(),
+        put_paths: req.put_paths.into_iter().collect(),
+        patch_paths: req.patch_paths.into_iter().collect(),
+        delete_paths: req.delete_paths.into_iter().collect(),
+        head_paths: req.head_paths.into_iter().collect(),
+        options_paths: req.options_paths.into_iter().collect(),
+        trace_paths: req.trace_paths.into_iter().collect(),
+      };
+      ROUTE_MGR.set_reverse_route_group(service_id.clone(), pb);
       maxwell_protocol::SetRoutesRep { r#ref: req.r#ref }.into_enum()
     } else {
       log::error!(
@@ -186,34 +196,40 @@ impl HandlerInner {
     self: Rc<Self>, req: maxwell_protocol::GetRoutesReq,
   ) -> maxwell_protocol::ProtocolMsg {
     let mut stale_services = vec![];
-    let mut route_groups = HashMap::default();
+
+    let mut ws_route_groups = HashMap::default();
+    let mut get_route_groups = HashMap::default();
+    let mut post_route_groups = HashMap::default();
+    let mut put_route_groups = HashMap::default();
+    let mut patch_route_groups = HashMap::default();
+    let mut delete_route_groups = HashMap::default();
+    let mut head_route_groups = HashMap::default();
+    let mut options_route_groups = HashMap::default();
+    let mut trace_route_groups = HashMap::default();
 
     for reverse_route_group in ROUTE_MGR.reverse_route_group_iter() {
-      let endpoint = reverse_route_group.key();
-
-      let is_healthy = match SERVICE_MGR.get(endpoint) {
+      let pb = reverse_route_group.value();
+      let service_id = reverse_route_group.key();
+      let is_healthy = match SERVICE_MGR.get(service_id) {
         Some(service) => service.is_healthy(),
         None => {
-          log::info!("Found a stale service: id: {}", endpoint);
-          stale_services.push(endpoint.clone());
+          log::info!("Found a stale service: id: {}", service_id);
+          stale_services.push(service_id.clone());
           continue;
         }
       };
+      // service_id is just the endpoint in this case
+      let endpoint = service_id;
 
-      let path_set = reverse_route_group.value();
-
-      for path in path_set {
-        let route_group = route_groups.entry(path.to_owned()).or_insert_with(|| RouteGroup {
-          path: path.clone(),
-          healthy_endpoints: Vec::new(),
-          unhealthy_endpoints: Vec::new(),
-        });
-        if is_healthy {
-          route_group.healthy_endpoints.push(endpoint.clone());
-        } else {
-          route_group.unhealthy_endpoints.push(endpoint.clone());
-        }
-      }
+      Self::build_route_groups(&mut ws_route_groups, &pb.ws_paths, &endpoint, is_healthy);
+      Self::build_route_groups(&mut get_route_groups, &pb.get_paths, &endpoint, is_healthy);
+      Self::build_route_groups(&mut post_route_groups, &pb.post_paths, &endpoint, is_healthy);
+      Self::build_route_groups(&mut put_route_groups, &pb.put_paths, &endpoint, is_healthy);
+      Self::build_route_groups(&mut patch_route_groups, &pb.patch_paths, &endpoint, is_healthy);
+      Self::build_route_groups(&mut delete_route_groups, &pb.delete_paths, &endpoint, is_healthy);
+      Self::build_route_groups(&mut head_route_groups, &pb.head_paths, &endpoint, is_healthy);
+      Self::build_route_groups(&mut options_route_groups, &pb.options_paths, &endpoint, is_healthy);
+      Self::build_route_groups(&mut trace_route_groups, &pb.trace_paths, &endpoint, is_healthy);
     }
 
     for service_id in &stale_services {
@@ -222,7 +238,15 @@ impl HandlerInner {
     }
 
     maxwell_protocol::GetRoutesRep {
-      route_groups: route_groups.values().cloned().collect(),
+      ws_route_groups: ws_route_groups.values().cloned().collect(),
+      get_route_groups: get_route_groups.values().cloned().collect(),
+      post_route_groups: post_route_groups.values().cloned().collect(),
+      put_route_groups: put_route_groups.values().cloned().collect(),
+      patch_route_groups: patch_route_groups.values().cloned().collect(),
+      delete_route_groups: delete_route_groups.values().cloned().collect(),
+      head_route_groups: head_route_groups.values().cloned().collect(),
+      options_route_groups: options_route_groups.values().cloned().collect(),
+      trace_route_groups: trace_route_groups.values().cloned().collect(),
       r#ref: req.r#ref,
     }
     .into_enum()
@@ -403,6 +427,25 @@ impl HandlerInner {
         NodeType::Backend => BACKEND_MGR.activate(node_id),
         NodeType::Service => SERVICE_MGR.activate(node_id),
         _ => {}
+      }
+    }
+  }
+
+  #[inline(always)]
+  fn build_route_groups(
+    route_groups_map: &mut HashMap<String, RouteGroup>, paths: &PathSet, endpoint: &String,
+    is_healthy: bool,
+  ) {
+    for path in paths {
+      let ws_route_group = route_groups_map.entry(path.to_owned()).or_insert_with(|| RouteGroup {
+        path: path.clone(),
+        healthy_endpoints: Vec::new(),
+        unhealthy_endpoints: Vec::new(),
+      });
+      if is_healthy {
+        ws_route_group.healthy_endpoints.push(endpoint.clone());
+      } else {
+        ws_route_group.unhealthy_endpoints.push(endpoint.clone());
       }
     }
   }

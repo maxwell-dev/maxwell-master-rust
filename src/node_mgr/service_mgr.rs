@@ -20,7 +20,7 @@ use crate::{config::CONFIG, db::DB};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Service {
-  pub(crate) id: String,
+  pub(crate) id: NodeId,
   pub(crate) private_ip: IpAddr,
   pub(crate) http_port: u32,
   pub(crate) active_at: u32,

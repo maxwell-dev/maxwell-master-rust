@@ -17,13 +17,27 @@ use seriesdb::{
 use crate::db::DB;
 use crate::node_mgr::NodeId;
 
-type Path = String;
-type PathSet = HashSet<Path, AHasher>;
-type RouteStore = TableEnhanced<NormalTable, NodeId, PathSet, RouteCoder>;
+pub(crate) type Path = String;
+pub(crate) type PathSet = HashSet<Path, AHasher>;
 
-pub struct RouteCoder;
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct PathBundle {
+  pub(crate) ws_paths: PathSet,
+  pub(crate) get_paths: PathSet,
+  pub(crate) post_paths: PathSet,
+  pub(crate) put_paths: PathSet,
+  pub(crate) patch_paths: PathSet,
+  pub(crate) delete_paths: PathSet,
+  pub(crate) head_paths: PathSet,
+  pub(crate) options_paths: PathSet,
+  pub(crate) trace_paths: PathSet,
+}
 
-impl Coder<NodeId, PathSet> for RouteCoder {
+type RouteStore = TableEnhanced<NormalTable, NodeId, PathBundle, RouteCoder>;
+
+struct RouteCoder;
+
+impl Coder<NodeId, PathBundle> for RouteCoder {
   type EncodedKey = Bytes;
   type EncodedValue = Bytes;
 
@@ -38,20 +52,20 @@ impl Coder<NodeId, PathSet> for RouteCoder {
   }
 
   #[inline(always)]
-  fn encode_value<V: Borrow<PathSet>>(value: V) -> Self::EncodedValue {
+  fn encode_value<V: Borrow<PathBundle>>(value: V) -> Self::EncodedValue {
     bincode::serialize(value.borrow()).unwrap().into()
   }
 
   #[inline(always)]
-  fn decode_value(value: &[u8]) -> PathSet {
+  fn decode_value(value: &[u8]) -> PathBundle {
     bincode::deserialize(value).unwrap()
   }
 }
 
 pub struct RouteMgr {
-  pub(crate) cache: DashMap<NodeId, PathSet, AHasher>,
-  pub(crate) route_store: Arc<RouteStore>,
-  pub(crate) version: AtomicU32,
+  cache: DashMap<NodeId, PathBundle, AHasher>,
+  route_store: Arc<RouteStore>,
+  version: AtomicU32,
 }
 
 impl RouteMgr {
@@ -62,14 +76,13 @@ impl RouteMgr {
     route_mgr
   }
 
-  pub fn add_reverse_route_group(&self, service_id: NodeId, paths: Vec<Path>) {
-    let path_set = paths.into_iter().collect();
-    let service_id_bytes = <RouteCoder as Coder<NodeId, PathSet>>::encode_key(&service_id);
-    let path_set_bytes = <RouteCoder as Coder<NodeId, PathSet>>::encode_value(&path_set);
+  pub fn set_reverse_route_group(&self, service_id: NodeId, pb: PathBundle) {
+    let service_id_bytes = <RouteCoder as Coder<NodeId, PathBundle>>::encode_key(&service_id);
+    let path_set_bytes = <RouteCoder as Coder<NodeId, PathBundle>>::encode_value(&pb);
     match self.cache.entry(service_id) {
       Entry::Occupied(mut entry) => {
-        if entry.get() != &path_set {
-          entry.insert(path_set);
+        if entry.get() != &pb {
+          entry.insert(pb);
           self.route_store.raw().put(service_id_bytes, path_set_bytes).unwrap_or_else(|err| {
             log::warn!("Failed to add reverse route group into store: {:?}", err);
           });
@@ -77,7 +90,7 @@ impl RouteMgr {
         }
       }
       Entry::Vacant(entry) => {
-        entry.insert(path_set);
+        entry.insert(pb);
         self.route_store.raw().put(service_id_bytes, path_set_bytes).unwrap_or_else(|err| {
           log::warn!("Failed to add reverse route group into store: {:?}", err);
         });
@@ -95,7 +108,7 @@ impl RouteMgr {
     }
   }
 
-  pub fn reverse_route_group_iter(&self) -> Iter<NodeId, PathSet, AHasher> {
+  pub fn reverse_route_group_iter(&self) -> Iter<NodeId, PathBundle, AHasher> {
     self.cache.iter()
   }
 
@@ -117,6 +130,6 @@ impl RouteMgr {
 
 pub static ROUTE_MGR: Lazy<RouteMgr> = Lazy::new(|| {
   RouteMgr::new(Arc::new(
-    DB.open_table("route_mgr.routes").unwrap().enhance::<NodeId, PathSet, RouteCoder>(),
+    DB.open_table("route_mgr.routes").unwrap().enhance::<NodeId, PathBundle, RouteCoder>(),
   ))
 });

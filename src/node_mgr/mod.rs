@@ -12,8 +12,8 @@ pub mod service_mgr;
 
 pub type NodeId = String;
 
-pub fn build_node_id(private_ip: IpAddr, http_port: u32) -> NodeId {
-  format!("{}:{}", private_ip, http_port)
+pub fn build_node_id(ip: IpAddr, port: u32) -> NodeId {
+  format!("{}:{}", ip, port)
 }
 
 #[derive(Debug, Clone, Copy)]

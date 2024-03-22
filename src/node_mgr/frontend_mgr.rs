@@ -11,7 +11,7 @@ use crate::config::CONFIG;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Frontend {
-  pub(crate) id: String,
+  pub(crate) id: NodeId,
   pub(crate) domain: String,
   pub(crate) http_port: u32,
   pub(crate) https_port: u32,
