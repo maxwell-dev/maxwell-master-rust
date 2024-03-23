@@ -218,7 +218,7 @@ impl HandlerInner {
           continue;
         }
       };
-      // service_id is just the endpoint in this case
+      // service_id is just the endpoint here
       let endpoint = service_id;
 
       Self::build_route_groups(&mut ws_route_groups, &pb.ws_paths, &endpoint, is_healthy);

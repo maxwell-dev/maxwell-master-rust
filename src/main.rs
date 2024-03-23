@@ -25,6 +25,8 @@ use crate::{
   handler::{http_handler::HttpHandler, ws_handler::Handler},
 };
 
+static SERVER_NAME: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+
 async fn ws(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
   let rep = ws::WsResponseBuilder::new(Handler::new(&req), &req, stream)
     .frame_size(CONFIG.server.max_frame_size)
@@ -36,7 +38,6 @@ async fn ws(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Erro
 async fn pick_frontend(req: HttpRequest) -> HttpResponse {
   let rep = HttpResponse::Ok()
     .content_type(ContentType::json())
-    .insert_header(("Access-Control-Allow-Origin", "*"))
     .force_close()
     .json(HttpHandler::new(&req).pick_frontend());
   log::info!("http req: {:?}, rep: {:?}", req, rep);
@@ -46,7 +47,6 @@ async fn pick_frontend(req: HttpRequest) -> HttpResponse {
 async fn pick_frontends(req: HttpRequest) -> HttpResponse {
   let rep = HttpResponse::Ok()
     .content_type(ContentType::json())
-    .insert_header(("Access-Control-Allow-Origin", "*"))
     .force_close()
     .json(HttpHandler::new(&req).pick_frontends());
   log::info!("http req: {:?}, rep: {:?}", req, rep);
@@ -72,6 +72,11 @@ async fn create_http_server(is_https: bool) -> Result<()> {
           .block_on_origin_mismatch(false)
           .expose_any_header()
           .max_age(None),
+      )
+      .wrap(
+        middleware::DefaultHeaders::new()
+          .add(("Access-Control-Allow-Origin", "*"))
+          .add(("Server", SERVER_NAME)),
       )
       .route("/$ws", web::get().to(ws))
       .route("/$pick-frontend", web::get().to(pick_frontend))
