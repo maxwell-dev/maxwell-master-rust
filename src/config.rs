@@ -58,6 +58,7 @@ pub struct ServiceMgrConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct FrontendConfig {
+  pub id: String,
   pub domain: String,
   pub http_port: u32,
   pub https_port: u32,
@@ -67,6 +68,7 @@ pub struct FrontendConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct BackendConfig {
+  pub id: String,
   pub http_port: u32,
   pub private_ip: IpAddr,
 }

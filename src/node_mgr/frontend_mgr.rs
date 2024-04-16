@@ -6,7 +6,7 @@ use dashmap::DashMap;
 use once_cell::sync::Lazy;
 use rand::{thread_rng, Rng};
 
-use super::{build_node_id, Node, NodeId, NodeIter, NodeRef, NodeRefMulti};
+use super::{Node, NodeId, NodeIter, NodeRef, NodeRefMulti};
 use crate::config::CONFIG;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -22,17 +22,10 @@ pub struct Frontend {
 
 impl Frontend {
   pub fn new(
-    domain: String, public_ip: IpAddr, private_ip: IpAddr, http_port: u32, https_port: u32,
+    id: String, domain: String, public_ip: IpAddr, private_ip: IpAddr, http_port: u32,
+    https_port: u32,
   ) -> Self {
-    Frontend {
-      id: build_node_id(private_ip, http_port),
-      domain,
-      public_ip,
-      private_ip,
-      http_port,
-      https_port,
-      active_at: 0,
-    }
+    Frontend { id, domain, public_ip, private_ip, http_port, https_port, active_at: 0 }
   }
 }
 
@@ -99,6 +92,7 @@ impl FrontendMgr {
   fn initialize(&self) {
     CONFIG.frontend_mgr.frontends.iter().for_each(|frontend_config| {
       let frontend = Frontend::new(
+        frontend_config.id.clone(),
         frontend_config.domain.clone(),
         frontend_config.public_ip,
         frontend_config.private_ip,

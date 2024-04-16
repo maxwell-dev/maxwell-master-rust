@@ -1,4 +1,4 @@
-use std::{fmt::Debug, net::IpAddr};
+use std::fmt::Debug;
 
 use ahash::RandomState as AHasher;
 use dashmap::{
@@ -11,10 +11,6 @@ pub mod frontend_mgr;
 pub mod service_mgr;
 
 pub type NodeId = String;
-
-pub fn build_node_id(ip: IpAddr, port: u32) -> NodeId {
-  format!("{}:{}", ip, port)
-}
 
 #[derive(Debug, Clone, Copy)]
 pub enum NodeType {

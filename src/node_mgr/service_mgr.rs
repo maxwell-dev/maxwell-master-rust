@@ -15,7 +15,7 @@ use seriesdb::{
   table::{NormalTable, Table, TableEnhanced},
 };
 
-use super::{build_node_id, Node, NodeId};
+use super::{Node, NodeId};
 use crate::{config::CONFIG, db::DB};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -41,13 +41,13 @@ impl Node for Service {
 }
 
 impl Service {
-  pub fn new(private_ip: IpAddr, http_port: u32) -> Self {
-    Service {
-      id: build_node_id(private_ip, http_port),
-      http_port,
-      private_ip,
-      active_at: Utc::now().timestamp() as u32,
-    }
+  pub fn new(id: String, private_ip: IpAddr, http_port: u32) -> Self {
+    Service { id, http_port, private_ip, active_at: Utc::now().timestamp() as u32 }
+  }
+
+  #[inline]
+  pub fn private_endpoint(&self) -> String {
+    format!("{}:{}", self.private_ip, self.http_port)
   }
 
   #[inline]
@@ -195,9 +195,10 @@ mod tests {
 
     let service_mgr = ServiceMgr::new(table);
 
+    let id = "service-0";
     let ip = "127.0.0.1".parse::<Ipv4Addr>().unwrap();
     let port = 10000;
-    let input_service = Service::new(IpAddr::V4(ip), port);
+    let input_service = Service::new(id.to_owned(), IpAddr::V4(ip), port);
 
     let id = input_service.id().clone();
     let output_service = service_mgr.get(&id);

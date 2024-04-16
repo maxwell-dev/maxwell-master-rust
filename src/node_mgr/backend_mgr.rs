@@ -5,7 +5,7 @@ use chrono::Utc;
 use dashmap::DashMap;
 use once_cell::sync::Lazy;
 
-use super::{build_node_id, Node, NodeId, NodeIter, NodeRef};
+use super::{Node, NodeId, NodeIter, NodeRef};
 use crate::config::CONFIG;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -17,8 +17,12 @@ pub struct Backend {
 }
 
 impl Backend {
-  pub fn new(private_ip: IpAddr, http_port: u32) -> Self {
-    Backend { id: build_node_id(private_ip, http_port), private_ip, http_port, active_at: 0 }
+  pub fn new(id: String, private_ip: IpAddr, http_port: u32) -> Self {
+    Backend { id, private_ip, http_port, active_at: 0 }
+  }
+
+  pub fn checksum(&self) -> u32 {
+    crc32fast::hash(format!("{}|{}|{}", self.id, self.private_ip, self.http_port).as_bytes())
   }
 }
 
@@ -90,12 +94,22 @@ impl BackendMgr {
   #[inline]
   fn initialize(&mut self) {
     CONFIG.backend_mgr.backends.iter().for_each(|backend_config| {
-      let backend = Backend::new(backend_config.private_ip, backend_config.http_port);
+      let backend = Backend::new(
+        backend_config.id.clone(),
+        backend_config.private_ip,
+        backend_config.http_port,
+      );
       self.backend_ids.push(backend.id.clone());
       self.backends.insert(backend.id.clone(), backend.clone());
     });
     self.backend_ids.sort();
-    self.checksum = crc32fast::hash(format!("{:?}", self.backend_ids).as_bytes());
+    let mut checksums = Vec::with_capacity(self.backend_ids.len());
+    for backend_id in &self.backend_ids {
+      if let Some(backend) = self.backends.get(backend_id) {
+        checksums.push(backend.checksum());
+      }
+    }
+    self.checksum = crc32fast::hash(format!("{:?}", checksums).as_bytes());
   }
 }
 

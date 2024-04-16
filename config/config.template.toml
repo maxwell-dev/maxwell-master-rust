@@ -12,12 +12,12 @@ workers = 8
 
 [frontend_mgr]
 frontends = [
-  {domain = "localhost", public_ip = "127.0.0.1", private_ip = "127.0.0.1", http_port = 10000, https_port = 11443},
+  {id = "frontend-0", domain = "localhost", public_ip = "127.0.0.1", private_ip = "127.0.0.1", http_port = 10000, https_port = 11443},
 ]
 
 [backend_mgr]
 backends = [
-  {private_ip = "127.0.0.1", http_port = 20000},
+  {id = "backend-0", private_ip = "127.0.0.1", http_port = 20000},
 ]
 
 [service_mgr]
