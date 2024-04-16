@@ -181,8 +181,21 @@ impl HandlerInner {
 
     log::info!("Registering service: from: {}, req: {:?}", self.peer_addr.ip(), req);
 
-    let service = Service::new(req.id, self.peer_addr.ip(), req.http_port);
-    SERVICE_MGR.add(service);
+    let new_service = Service::new(req.id, self.peer_addr.ip(), req.http_port);
+    if let Some(curr_service) = SERVICE_MGR.get(new_service.id()) {
+      if new_service.private_ip != curr_service.private_ip
+        || new_service.http_port != curr_service.http_port
+      {
+        log::warn!(
+          "The service's private endpoint was changed: current: {}, new: {}",
+          curr_service.private_endpoint(),
+          new_service.private_endpoint()
+        );
+      }
+    }
+
+    SERVICE_MGR.add(new_service);
+
     maxwell_protocol::RegisterServiceRep { r#ref: req.r#ref }.into_enum()
   }
 
