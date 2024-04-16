@@ -1236,7 +1236,7 @@ dependencies = [
 
 [[package]]
 name = "maxwell-master"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "actix",
  "actix-cors",
@@ -1267,8 +1267,8 @@ dependencies = [
 
 [[package]]
 name = "maxwell-protocol"
-version = "0.23.0"
-source = "git+https://github.com/maxwell-dev/maxwell-protocol-rust.git?tag=v0.23.0#460a6044c04c1ca718064cbf2b33f814bbecf757"
+version = "0.23.1"
+source = "git+https://github.com/maxwell-dev/maxwell-protocol-rust.git?tag=v0.23.1#168219d6a1f20dca9847a460718aceebd9d78d00"
 dependencies = [
  "actix",
  "bytes",

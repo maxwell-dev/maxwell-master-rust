@@ -2,7 +2,7 @@
 authors = ["Chaoqian Xu <chaoranxu@gmail.com>"]
 edition = "2021"
 name = "maxwell-master"
-version = "0.7.1"
+version = "0.7.2"
 
 [dependencies]
 config = "0.14.0"
@@ -32,4 +32,4 @@ serde = "1.0.197"
 serde_derive = "1.0.197"
 seriesdb = {git = "https://github.com/xuchaoqian/seriesdb-rust.git", tag = "v0.10.1"}
 
-maxwell-protocol = {git = "https://github.com/maxwell-dev/maxwell-protocol-rust.git", tag = "v0.23.0"}
+maxwell-protocol = {git = "https://github.com/maxwell-dev/maxwell-protocol-rust.git", tag = "v0.23.1"}
