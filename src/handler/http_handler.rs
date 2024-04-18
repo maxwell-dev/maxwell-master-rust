@@ -1,4 +1,4 @@
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 
 use actix_web::HttpRequest;
 use maxwell_protocol::{self, *};
@@ -38,13 +38,20 @@ pub struct HttpHandler {
 impl HttpHandler {
   #[inline]
   pub fn new(req: &HttpRequest) -> Self {
+    let conn_info = req.connection_info();
     Self {
-      addr_type: if let Some(peer_addr) = &req.peer_addr() {
-        Self::detect_addr_type(peer_addr)
+      addr_type: if let Some(remote_addr) = conn_info.realip_remote_addr() {
+        match remote_addr.parse::<IpAddr>() {
+          Ok(ip_addr) => Self::detect_ip_addr_type(&ip_addr),
+          Err(err) => {
+            log::error!("Failed to parse remote address: {}", err);
+            AddrType::Public
+          }
+        }
       } else {
         AddrType::Public
       },
-      is_https: req.connection_info().scheme() == "https",
+      is_https: conn_info.scheme() == "https",
     }
   }
 
@@ -77,8 +84,8 @@ impl HttpHandler {
   }
 
   #[inline]
-  fn detect_addr_type(peer_addr: &SocketAddr) -> AddrType {
-    match peer_addr.ip() {
+  fn detect_ip_addr_type(ip_addr: &IpAddr) -> AddrType {
+    match ip_addr {
       IpAddr::V4(ip) => {
         if ip.is_loopback() {
           AddrType::Loopback
