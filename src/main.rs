@@ -27,6 +27,10 @@ use crate::{
 
 static SERVER_NAME: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
+async fn health(_req: HttpRequest) -> Result<HttpResponse, Error> {
+  Ok(HttpResponse::Ok().body(""))
+}
+
 async fn ws(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
   let rep = ws::WsResponseBuilder::new(Handler::new(&req), &req, stream)
     .frame_size(CONFIG.server.max_frame_size)
@@ -78,6 +82,7 @@ async fn create_http_server(is_https: bool) -> Result<()> {
           .add(("Access-Control-Allow-Origin", "*"))
           .add(("Server", SERVER_NAME)),
       )
+      .route("/$health", web::get().to(health))
       .route("/$ws", web::get().to(ws))
       .route("/$pick-frontend", web::get().to(pick_frontend))
       .route("/$pick-frontends", web::get().to(pick_frontends))
