@@ -77,8 +77,8 @@ impl HttpHandler {
   }
 
   #[inline]
-  fn detect_addr_type(peer_addr: &SocketAddr) -> AddrType {
-    match peer_addr.ip() {
+  fn detect_addr_type(addr: &SocketAddr) -> AddrType {
+    match addr.ip() {
       IpAddr::V4(ip) => {
         if ip.is_loopback() {
           AddrType::Loopback
