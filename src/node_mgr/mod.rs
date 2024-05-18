@@ -22,7 +22,9 @@ pub enum NodeType {
 
 pub trait Node: Clone + Debug {
   fn id(&self) -> &NodeId;
+  #[allow(dead_code)]
   fn active_at(&self) -> u32;
+  #[allow(dead_code)]
   fn set_active_at(&mut self, active_at: u32);
 }
 

@@ -48,7 +48,7 @@ pub type FrontendRefMulti<'a> = NodeRefMulti<'a, Frontend>;
 pub type FrontendIter<'a> = NodeIter<'a, Frontend>;
 
 pub struct FrontendMgr {
-  pub(crate) frontends: DashMap<NodeId, Frontend, AHasher>,
+  frontends: DashMap<NodeId, Frontend, AHasher>,
 }
 
 impl FrontendMgr {

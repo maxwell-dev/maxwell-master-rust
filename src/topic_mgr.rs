@@ -91,6 +91,7 @@ pub struct TopicMgr {
 }
 
 impl TopicMgr {
+  #[inline]
   fn new(topic_store: Arc<TopicStore>, info_store: Arc<InfoStore>) -> Self {
     let cache = Cache::with_weighter(10000, 10000 as u64 * 64, TopicWeighter);
     let topic_mgr = TopicMgr { cache, topic_store, info_store };
@@ -98,6 +99,7 @@ impl TopicMgr {
     topic_mgr
   }
 
+  #[inline]
   pub fn assign(&self, topic: Topic, backend_id: NodeId) -> Result<()> {
     let topic_bytes = <TopicCoder as Coder<Topic, NodeId>>::encode_key(&topic);
     let backend_id_bytes = <TopicCoder as Coder<Topic, NodeId>>::encode_value(&backend_id);
@@ -105,6 +107,7 @@ impl TopicMgr {
     Ok(self.topic_store.raw().put(topic_bytes, backend_id_bytes)?)
   }
 
+  #[inline]
   pub fn locate(&self, topic: &Topic) -> Result<Option<NodeId>> {
     let backend_id = self.cache.get(topic);
     if backend_id.is_some() {
@@ -119,6 +122,8 @@ impl TopicMgr {
     }
   }
 
+  // Deletes all topics if the checksum of backends changed
+  #[inline]
   fn check(&self) {
     let info_key = "backend_checksum".to_owned();
     let curr_backend_checksum = format!("{}", BACKEND_MGR.checksum());

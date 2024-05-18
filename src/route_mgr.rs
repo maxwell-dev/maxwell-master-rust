@@ -6,6 +6,7 @@ use std::{borrow::Borrow, collections::HashSet};
 
 use ahash::RandomState as AHasher;
 use bytes::{Bytes, BytesMut};
+use chrono::Utc;
 use dashmap::{iter::Iter, mapref::entry::Entry, DashMap};
 use once_cell::sync::Lazy;
 use seriesdb::{
@@ -69,53 +70,74 @@ pub struct RouteMgr {
 }
 
 impl RouteMgr {
+  #[inline]
   fn new(route_store: Arc<RouteStore>) -> Self {
     let cache = DashMap::with_capacity_and_hasher(512, AHasher::default());
-    let route_mgr = RouteMgr { cache, route_store, version: AtomicU32::new(0) };
+    let route_mgr = RouteMgr {
+      cache,
+      route_store,
+      version: AtomicU32::new(crc32fast::hash(
+        format!("{}", Utc::now().timestamp_millis()).as_bytes(),
+      )),
+    };
     route_mgr.recover();
     route_mgr
   }
 
+  #[inline]
   pub fn set_reverse_route_group(&self, service_id: NodeId, pb: PathBundle) {
     let service_id_bytes = <RouteCoder as Coder<NodeId, PathBundle>>::encode_key(&service_id);
     let path_set_bytes = <RouteCoder as Coder<NodeId, PathBundle>>::encode_value(&pb);
     match self.cache.entry(service_id) {
       Entry::Occupied(mut entry) => {
         if entry.get() != &pb {
+          log::debug!("Updating reverse route group: {:?}", pb);
           entry.insert(pb);
           self.route_store.raw().put(service_id_bytes, path_set_bytes).unwrap_or_else(|err| {
             log::warn!("Failed to add reverse route group into store: {:?}", err);
           });
-          self.version.fetch_add(1, Ordering::SeqCst);
+          self.update_version();
+        } else {
+          log::debug!("Reverse route group is the same, no need to update.");
         }
       }
       Entry::Vacant(entry) => {
+        log::debug!("Adding reverse route group: {:?}", pb);
         entry.insert(pb);
         self.route_store.raw().put(service_id_bytes, path_set_bytes).unwrap_or_else(|err| {
           log::warn!("Failed to add reverse route group into store: {:?}", err);
         });
-        self.version.fetch_add(1, Ordering::SeqCst);
+        self.update_version();
       }
     }
   }
 
+  #[inline]
   pub fn remove_reverse_route_group(&self, service_id: &NodeId) {
     if self.cache.remove(service_id).is_some() {
       self.route_store.delete(service_id).unwrap_or_else(|err| {
         log::warn!("Failed to remove reverse route group from store: {:?}", err);
       });
-      self.version.fetch_add(1, Ordering::SeqCst);
+      self.update_version();
     }
   }
 
+  #[inline]
   pub fn reverse_route_group_iter(&self) -> Iter<NodeId, PathBundle, AHasher> {
     self.cache.iter()
   }
 
+  #[inline]
   pub fn version(&self) -> u32 {
     self.version.load(Ordering::SeqCst)
   }
 
+  #[inline]
+  fn update_version(&self) {
+    self.version.fetch_add(1, Ordering::SeqCst);
+  }
+
+  #[inline]
   fn recover(&self) {
     let mut cursor = self.route_store.new_cursor();
     cursor.seek_to_first();

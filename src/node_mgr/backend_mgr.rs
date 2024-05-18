@@ -44,9 +44,9 @@ pub type BackendRef<'a> = NodeRef<'a, Backend>;
 pub type BackendIter<'a> = NodeIter<'a, Backend>;
 
 pub struct BackendMgr {
-  pub(crate) backends: DashMap<NodeId, Backend, AHasher>,
-  pub(crate) backend_ids: Vec<NodeId>,
-  pub(crate) checksum: u32,
+  backends: DashMap<NodeId, Backend, AHasher>,
+  backend_ids: Vec<NodeId>,
+  checksum: u32,
 }
 
 impl BackendMgr {

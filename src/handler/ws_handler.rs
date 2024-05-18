@@ -182,18 +182,6 @@ impl HandlerInner {
     log::info!("Registering service: from: {}, req: {:?}", self.peer_addr.ip(), req);
 
     let new_service = Service::new(req.id, self.peer_addr.ip(), req.http_port);
-    if let Some(curr_service) = SERVICE_MGR.get(new_service.id()) {
-      if new_service.private_ip != curr_service.private_ip
-        || new_service.http_port != curr_service.http_port
-      {
-        log::warn!(
-          "The service's private endpoint was changed: current: {}, new: {}",
-          curr_service.private_endpoint(),
-          new_service.private_endpoint()
-        );
-      }
-    }
-
     SERVICE_MGR.add(new_service);
 
     maxwell_protocol::RegisterServiceRep { r#ref: req.r#ref }.into_enum()
@@ -204,7 +192,7 @@ impl HandlerInner {
     self: Rc<Self>, req: maxwell_protocol::SetRoutesReq,
   ) -> maxwell_protocol::ProtocolMsg {
     if let Some(service_id) = self.node_id.borrow().as_ref() {
-      log::info!("Setting routes: from: {}, req : {:?}", service_id, req);
+      log::info!("Setting routes: id: {}, req : {:?}", service_id, req);
       let pb = PathBundle {
         ws_paths: req.ws_paths.into_iter().collect(),
         get_paths: req.get_paths.into_iter().collect(),
@@ -329,14 +317,15 @@ impl HandlerInner {
       ROUTE_MGR.remove_reverse_route_group(&service_id);
     }
 
-    let seed = format!(
-      "{}|{}",
-      ROUTE_MGR.version(),
-      if is_every_service_healthy { 1 } else { Utc::now().timestamp_millis() }
+    let checksum = crc32fast::hash(
+      format!(
+        "{}|{}|{}",
+        SERVICE_MGR.version(),
+        ROUTE_MGR.version(),
+        if is_every_service_healthy { 1 } else { Utc::now().timestamp_millis() }
+      )
+      .as_bytes(),
     );
-    let mut hasher = crc32fast::Hasher::new();
-    hasher.update(seed.as_bytes());
-    let checksum = hasher.finalize();
 
     maxwell_protocol::GetRouteDistChecksumRep { checksum, r#ref: req.r#ref }.into_enum()
   }
@@ -467,6 +456,7 @@ impl HandlerInner {
   #[inline(always)]
   fn activate_node(self: Rc<Self>) {
     if let Some(node_id) = self.node_id.borrow().as_ref() {
+      log::debug!("Activating node: id: {}, type: {:?}", node_id, self.node_type.get());
       match self.node_type.get() {
         NodeType::Frontend => FRONTEND_MGR.activate(node_id),
         NodeType::Backend => BACKEND_MGR.activate(node_id),
@@ -504,16 +494,16 @@ impl Actor for Handler {
   type Context = ws::WebsocketContext<Self>;
 
   fn started(&mut self, _ctx: &mut Self::Context) {
-    log::debug!("Handler actor started: id: {:?}", self.inner.id);
+    log::debug!("Handler actor started: id: {}", self.inner.id);
   }
 
   fn stopping(&mut self, _ctx: &mut Self::Context) -> Running {
-    log::debug!("Handler actor stopping: id: {:?}", self.inner.id);
+    log::debug!("Handler actor stopping: id: {}", self.inner.id);
     Running::Stop
   }
 
   fn stopped(&mut self, _ctx: &mut Self::Context) {
-    log::debug!("Handler actor stopped: id: {:?}", self.inner.id);
+    log::debug!("Handler actor stopped: id: {}", self.inner.id);
   }
 }
 

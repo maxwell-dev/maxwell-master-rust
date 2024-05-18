@@ -1,8 +1,13 @@
-use std::{borrow::Borrow, fmt::Debug, net::IpAddr};
+use std::{
+  borrow::Borrow,
+  fmt::Debug,
+  net::IpAddr,
+  sync::atomic::{AtomicU32, Ordering},
+};
 
 use ahash::RandomState as AHasher;
 use bytes::{Bytes, BytesMut};
-use chrono::prelude::*;
+use chrono::Utc;
 use dashmap::{
   mapref::{entry::Entry, one::Ref},
   DashMap,
@@ -58,6 +63,15 @@ impl Service {
       true
     }
   }
+
+  #[inline]
+  pub fn is_stale(&self) -> bool {
+    if Utc::now().timestamp() as u32 - self.active_at > CONFIG.service_mgr.stale_threshold {
+      true
+    } else {
+      false
+    }
+  }
 }
 
 pub struct ServiceCoder;
@@ -91,15 +105,22 @@ pub type ServiceRef<'a> = Ref<'a, NodeId, Service, AHasher>;
 type ServiceStore = TableEnhanced<NormalTable, NodeId, Service, ServiceCoder>;
 
 pub struct ServiceMgr {
-  pub(crate) cache: DashMap<NodeId, Service, AHasher>,
-  pub(crate) service_store: ServiceStore,
+  cache: DashMap<NodeId, Service, AHasher>,
+  service_store: ServiceStore,
+  version: AtomicU32,
 }
 
 impl ServiceMgr {
   #[inline]
   pub(crate) fn new(service_store: ServiceStore) -> Self {
     let cache = DashMap::with_capacity_and_hasher(64, AHasher::default());
-    let service_mgr = ServiceMgr { cache, service_store };
+    let service_mgr = ServiceMgr {
+      cache,
+      service_store,
+      version: AtomicU32::new(crc32fast::hash(
+        format!("{}", Utc::now().timestamp_millis()).as_bytes(),
+      )),
+    };
     service_mgr.recover();
     service_mgr
   }
@@ -108,21 +129,54 @@ impl ServiceMgr {
   pub fn add(&self, service: Service) {
     let id_bytes = <ServiceCoder as Coder<NodeId, Service>>::encode_key(&service.id);
     let service_bytes = <ServiceCoder as Coder<NodeId, Service>>::encode_value(&service);
-    self.cache.insert(service.id.clone(), service);
-    self
-      .service_store
-      .raw()
-      .put(id_bytes, service_bytes)
-      .unwrap_or_else(|err| log::warn!("Failed to add service: err: {:?}", err));
+    match self.cache.entry(service.id.clone()) {
+      Entry::Occupied(mut entry) => {
+        let curr_service = entry.get();
+        let changed = if service.private_ip != curr_service.private_ip
+          || service.http_port != curr_service.http_port
+        {
+          log::info!(
+            "The service's private endpoint was changed: current: {}, new: {}",
+            curr_service.private_endpoint(),
+            service.private_endpoint()
+          );
+          true
+        } else {
+          log::debug!("The service is the same, no need to update version.");
+          false
+        };
+        entry.insert(service);
+        self
+          .service_store
+          .raw()
+          .put(id_bytes, service_bytes)
+          .unwrap_or_else(|err| log::warn!("Failed to add service: err: {:?}", err));
+        if changed {
+          self.update_version();
+        }
+      }
+      Entry::Vacant(entry) => {
+        log::debug!("Adding service: {:?}", service);
+        entry.insert(service);
+        self
+          .service_store
+          .raw()
+          .put(id_bytes, service_bytes)
+          .unwrap_or_else(|err| log::warn!("Failed to add service: err: {:?}", err));
+        self.update_version();
+      }
+    }
   }
 
   #[inline]
   pub fn remove(&self, id: &NodeId) {
-    self.cache.remove(id);
-    self
-      .service_store
-      .delete(id)
-      .unwrap_or_else(|err| log::warn!("Failed to remove service: err: {:?}", err));
+    if self.cache.remove(id).is_some() {
+      self
+        .service_store
+        .delete(id)
+        .unwrap_or_else(|err| log::warn!("Failed to remove service: err: {:?}", err));
+      self.update_version();
+    }
   }
 
   #[inline]
@@ -142,12 +196,13 @@ impl ServiceMgr {
     match self.cache.entry(id.clone()) {
       Entry::Occupied(entry) => {
         let service = entry.get();
-        if Utc::now().timestamp() as u32 - service.active_at > CONFIG.service_mgr.stale_threshold {
+        if service.is_stale() {
           entry.remove();
           self
             .service_store
             .delete(id)
             .unwrap_or_else(|err| log::warn!("Failed to remove service: err: {:?}", err));
+          self.update_version();
           None
         } else {
           Some(entry.into_ref().downgrade())
@@ -155,6 +210,16 @@ impl ServiceMgr {
       }
       Entry::Vacant(_) => None,
     }
+  }
+
+  #[inline]
+  pub fn version(&self) -> u32 {
+    self.version.load(Ordering::SeqCst)
+  }
+
+  #[inline]
+  fn update_version(&self) {
+    self.version.fetch_add(1, Ordering::SeqCst);
   }
 
   #[inline]
