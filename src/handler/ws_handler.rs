@@ -95,7 +95,11 @@ impl HandlerInner {
     self: Rc<Self>, req: maxwell_protocol::RegisterFrontendReq,
   ) -> maxwell_protocol::ProtocolMsg {
     self.node_type.set(NodeType::Frontend);
-    *self.node_id.borrow_mut() = Some(req.id.clone());
+    if req.id != "" {
+      *self.node_id.borrow_mut() = Some(req.id.clone());
+    } else {
+      *self.node_id.borrow_mut() = Some(format!("{}:{}", self.peer_addr.ip(), req.http_port));
+    }
 
     log::info!("Registering frontend: from: {}, req: {:?}", self.peer_addr.ip(), req);
 
@@ -136,7 +140,11 @@ impl HandlerInner {
     self: Rc<Self>, req: maxwell_protocol::RegisterBackendReq,
   ) -> maxwell_protocol::ProtocolMsg {
     self.node_type.set(NodeType::Backend);
-    *self.node_id.borrow_mut() = Some(req.id.clone());
+    if req.id != "" {
+      *self.node_id.borrow_mut() = Some(req.id.clone());
+    } else {
+      *self.node_id.borrow_mut() = Some(format!("{}:{}", self.peer_addr.ip(), req.http_port));
+    }
 
     log::info!("Registering backend: from: {}, req: {:?}", self.peer_addr.ip(), req);
 
@@ -177,7 +185,11 @@ impl HandlerInner {
     self: Rc<Self>, req: maxwell_protocol::RegisterServiceReq,
   ) -> maxwell_protocol::ProtocolMsg {
     self.node_type.set(NodeType::Service);
-    *self.node_id.borrow_mut() = Some(req.id.clone());
+    if req.id != "" {
+      *self.node_id.borrow_mut() = Some(req.id.clone());
+    } else {
+      *self.node_id.borrow_mut() = Some(format!("{}:{}", self.peer_addr.ip(), req.http_port));
+    }
 
     log::info!("Registering service: from: {}, req: {:?}", self.peer_addr.ip(), req);
 

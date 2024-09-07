@@ -28,8 +28,8 @@ pub trait Node: Clone + Debug {
   fn set_active_at(&mut self, active_at: u32);
 }
 
-pub type NodeRef<'a, N> = Ref<'a, NodeId, N, AHasher>;
-pub type NodeRefMulti<'a, N> = RefMulti<'a, NodeId, N, AHasher>;
+pub type NodeRef<'a, N> = Ref<'a, NodeId, N>;
+pub type NodeRefMulti<'a, N> = RefMulti<'a, NodeId, N>;
 pub type NodeIter<'a, N> = Iter<'a, NodeId, N, AHasher>;
 
 pub use backend_mgr::*;

@@ -101,7 +101,7 @@ impl Coder<NodeId, Service> for ServiceCoder {
   }
 }
 
-pub type ServiceRef<'a> = Ref<'a, NodeId, Service, AHasher>;
+pub type ServiceRef<'a> = Ref<'a, NodeId, Service>;
 type ServiceStore = TableEnhanced<NormalTable, NodeId, Service, ServiceCoder>;
 
 pub struct ServiceMgr {

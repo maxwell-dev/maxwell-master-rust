@@ -79,8 +79,8 @@ impl Coder<InfoKey, InfoValue> for InfoCoder {
 struct TopicWeighter;
 
 impl Weighter<String, String> for TopicWeighter {
-  fn weight(&self, key: &String, val: &String) -> u32 {
-    (key.len() + val.len()) as u32
+  fn weight(&self, key: &String, val: &String) -> u64 {
+    (key.len() + val.len()) as u64
   }
 }
 

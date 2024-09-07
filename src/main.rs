@@ -17,7 +17,7 @@ use actix_web::{
 use actix_web_actors::ws;
 use anyhow::{anyhow, Result};
 use futures::future;
-use rustls::{Certificate, PrivateKey, ServerConfig};
+use rustls::{pki_types::PrivateKeyDer, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 
 use crate::{
@@ -94,7 +94,7 @@ async fn create_http_server(is_https: bool) -> Result<()> {
   .workers(CONFIG.server.workers);
 
   if is_https {
-    http_server.bind_rustls_021(
+    http_server.bind_rustls_0_23(
       format!("{}:{}", "0.0.0.0", CONFIG.server.https_port),
       create_tls_config()?,
     )?
@@ -113,13 +113,12 @@ fn create_tls_config() -> Result<ServerConfig> {
   let cert_buf = &mut BufReader::new(cert_file);
   let key_buf = &mut BufReader::new(key_file);
 
-  let cert_chain = certs(cert_buf)?.into_iter().map(Certificate).collect();
-  let mut keys = pkcs8_private_keys(key_buf)?;
+  let cert_chain = certs(cert_buf).collect::<Result<Vec<_>, _>>()?;
+  let mut keys = pkcs8_private_keys(key_buf).collect::<Result<Vec<_>, _>>().unwrap();
 
   Ok(
     ServerConfig::builder()
-      .with_safe_defaults()
       .with_no_client_auth()
-      .with_single_cert(cert_chain, PrivateKey(keys.remove(0)))?,
+      .with_single_cert(cert_chain, PrivateKeyDer::Pkcs8(keys.remove(0)))?,
   )
 }
