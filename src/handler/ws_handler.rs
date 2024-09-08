@@ -95,11 +95,7 @@ impl HandlerInner {
     self: Rc<Self>, req: maxwell_protocol::RegisterFrontendReq,
   ) -> maxwell_protocol::ProtocolMsg {
     self.node_type.set(NodeType::Frontend);
-    if req.id != "" {
-      *self.node_id.borrow_mut() = Some(req.id.clone());
-    } else {
-      *self.node_id.borrow_mut() = Some(format!("{}:{}", self.peer_addr.ip(), req.http_port));
-    }
+    *self.node_id.borrow_mut() = Some(req.id.clone());
 
     log::info!("Registering frontend: from: {}, req: {:?}", self.peer_addr.ip(), req);
 
@@ -140,11 +136,7 @@ impl HandlerInner {
     self: Rc<Self>, req: maxwell_protocol::RegisterBackendReq,
   ) -> maxwell_protocol::ProtocolMsg {
     self.node_type.set(NodeType::Backend);
-    if req.id != "" {
-      *self.node_id.borrow_mut() = Some(req.id.clone());
-    } else {
-      *self.node_id.borrow_mut() = Some(format!("{}:{}", self.peer_addr.ip(), req.http_port));
-    }
+    *self.node_id.borrow_mut() = Some(req.id.clone());
 
     log::info!("Registering backend: from: {}, req: {:?}", self.peer_addr.ip(), req);
 
@@ -184,16 +176,18 @@ impl HandlerInner {
   fn handle_register_service_req(
     self: Rc<Self>, req: maxwell_protocol::RegisterServiceReq,
   ) -> maxwell_protocol::ProtocolMsg {
-    self.node_type.set(NodeType::Service);
-    if req.id != "" {
-      *self.node_id.borrow_mut() = Some(req.id.clone());
+    let id = if req.id != "" {
+      req.id.clone()
     } else {
-      *self.node_id.borrow_mut() = Some(format!("{}:{}", self.peer_addr.ip(), req.http_port));
-    }
+      format!("{}:{}", self.peer_addr.ip(), req.http_port)
+    };
+
+    self.node_type.set(NodeType::Service);
+    *self.node_id.borrow_mut() = Some(id.clone());
 
     log::info!("Registering service: from: {}, req: {:?}", self.peer_addr.ip(), req);
 
-    let new_service = Service::new(req.id, self.peer_addr.ip(), req.http_port);
+    let new_service = Service::new(id, self.peer_addr.ip(), req.http_port);
     SERVICE_MGR.add(new_service);
 
     maxwell_protocol::RegisterServiceRep { r#ref: req.r#ref }.into_enum()
