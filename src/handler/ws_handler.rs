@@ -97,14 +97,14 @@ impl HandlerInner {
     self.node_type.set(NodeType::Frontend);
     *self.node_id.borrow_mut() = Some(req.id.clone());
 
-    log::info!("Registering frontend: from: {}, req: {:?}", self.peer_addr.ip(), req);
+    log::info!("Registering frontend: from: {:?}, req: {:?}", self.peer_addr.ip(), req);
 
     if let Some(frontend) = FRONTEND_MGR.get(&req.id) {
       if req.http_port == frontend.http_port {
         maxwell_protocol::RegisterFrontendRep { r#ref: req.r#ref }.into_enum()
       } else {
         log::error!(
-          "The frontend http port does not match: config: {}, request: {}",
+          "The frontend http port does not match: config: {:?}, request: {:?}",
           frontend.http_port,
           req.http_port
         );
@@ -120,7 +120,7 @@ impl HandlerInner {
         .into_enum()
       }
     } else {
-      log::error!("Frontend not found in config: id: {}", req.id);
+      log::error!("Frontend not found in config: id: {:?}", req.id);
 
       maxwell_protocol::ErrorRep {
         code: ErrorCode::NotAllowedToRegisterFrontend as i32,
@@ -138,14 +138,14 @@ impl HandlerInner {
     self.node_type.set(NodeType::Backend);
     *self.node_id.borrow_mut() = Some(req.id.clone());
 
-    log::info!("Registering backend: from: {}, req: {:?}", self.peer_addr.ip(), req);
+    log::info!("Registering backend: from: {:?}, req: {:?}", self.peer_addr.ip(), req);
 
     if let Some(backend) = BACKEND_MGR.get(&req.id) {
       if req.http_port == backend.http_port {
         maxwell_protocol::RegisterBackendRep { r#ref: req.r#ref }.into_enum()
       } else {
         log::error!(
-          "The backend http port does not match: config: {}, request: {}",
+          "The backend http port does not match: config: {:?}, request: {:?}",
           backend.http_port,
           req.http_port
         );
@@ -161,7 +161,7 @@ impl HandlerInner {
         .into_enum()
       }
     } else {
-      log::error!("Backend not found in config: id: {}", req.id);
+      log::error!("Backend not found in config: id: {:?}", req.id);
 
       maxwell_protocol::ErrorRep {
         code: ErrorCode::NotAllowedToRegisterBackend as i32,
@@ -185,7 +185,7 @@ impl HandlerInner {
     self.node_type.set(NodeType::Service);
     *self.node_id.borrow_mut() = Some(id.clone());
 
-    log::info!("Registering service: from: {}, req: {:?}", self.peer_addr.ip(), req);
+    log::info!("Registering service: from: {:?}, req: {:?}", self.peer_addr.ip(), req);
 
     let new_service = Service::new(id, self.peer_addr.ip(), req.http_port);
     SERVICE_MGR.add(new_service);
@@ -198,7 +198,7 @@ impl HandlerInner {
     self: Rc<Self>, req: maxwell_protocol::SetRoutesReq,
   ) -> maxwell_protocol::ProtocolMsg {
     if let Some(service_id) = self.node_id.borrow().as_ref() {
-      log::info!("Setting routes: id: {}, req : {:?}", service_id, req);
+      log::info!("Setting routes: id: {:?}, req : {:?}", service_id, req);
       let pb = PathBundle {
         ws_paths: req.ws_paths.into_iter().collect(),
         get_paths: req.get_paths.into_iter().collect(),
@@ -214,7 +214,7 @@ impl HandlerInner {
       maxwell_protocol::SetRoutesRep { r#ref: req.r#ref }.into_enum()
     } else {
       log::error!(
-        "The related service has not registered: ip: {}, req: {:?}",
+        "The related service has not registered: ip: {:?}, req: {:?}",
         self.peer_addr.ip(),
         req
       );
@@ -254,7 +254,7 @@ impl HandlerInner {
       let (endpoint, is_healthy) = match SERVICE_MGR.get(service_id) {
         Some(service) => (service.private_endpoint(), service.is_healthy()),
         None => {
-          log::warn!("Found a stale service: id: {}", service_id);
+          log::warn!("Found a stale service: id: {:?}", service_id);
           stale_services.push(service_id.clone());
           continue;
         }
@@ -306,12 +306,12 @@ impl HandlerInner {
     for reverse_route_group in ROUTE_MGR.reverse_route_group_iter() {
       if let Some(service) = SERVICE_MGR.get(reverse_route_group.key()) {
         if !service.is_healthy() {
-          log::info!("Found an unhealthy service: id: {}", service.id());
+          log::info!("Found an unhealthy service: id: {:?}", service.id());
           is_every_service_healthy = false;
           break;
         }
       } else {
-        log::info!("Found a stale service: id: {}", reverse_route_group.key());
+        log::info!("Found a stale service: id: {:?}", reverse_route_group.key());
         stale_services.push(reverse_route_group.key().clone());
         is_every_service_healthy = false;
         break;
@@ -374,7 +374,7 @@ impl HandlerInner {
   ) -> maxwell_protocol::ProtocolMsg {
     match TOPIC_MGR.locate(&req.topic) {
       Ok(Some(backend_id)) => {
-        log::debug!("Found the backend: topic: {}, backend_id: {}", req.topic, backend_id);
+        log::debug!("Found the backend: topic: {:?}, backend_id: {:?}", req.topic, backend_id);
 
         if let Some(backend) = BACKEND_MGR.get(&backend_id) {
           maxwell_protocol::LocateTopicRep {
@@ -384,7 +384,7 @@ impl HandlerInner {
           .into_enum()
         } else {
           log::error!(
-            "Failed to find the backend: topic: {}, backend_id: {}",
+            "Failed to find the backend: topic: {:?}, backend_id: {:?}",
             req.topic,
             backend_id
           );
@@ -408,7 +408,7 @@ impl HandlerInner {
           let index = hash % ids.len() as u64;
           ids.get(index as usize)
         }) {
-          log::debug!("Picked the backend: topic: {}, backend_id: {}", req.topic, backend.id());
+          log::debug!("Picked the backend: topic: {:?}, backend_id: {:?}", req.topic, backend.id());
 
           match TOPIC_MGR.assign(req.topic.clone(), backend.id().clone()) {
             Ok(()) => maxwell_protocol::LocateTopicRep {
@@ -417,7 +417,7 @@ impl HandlerInner {
             }
             .into_enum(),
             Err(err) => {
-              log::error!("Failed to assign topic: {}, err: {}", req.topic, err);
+              log::error!("Failed to assign topic: {:?}, err: {:?}", req.topic, err);
 
               return maxwell_protocol::ErrorRep {
                 code: ErrorCode::FailedToLocateTopic as i32,
@@ -428,7 +428,7 @@ impl HandlerInner {
             }
           }
         } else {
-          log::error!("Failed to find an available backend: topic: {}", req.topic);
+          log::error!("Failed to find an available backend: topic: {:?}", req.topic);
 
           maxwell_protocol::ErrorRep {
             code: ErrorCode::FailedToLocateTopic as i32,
@@ -439,7 +439,7 @@ impl HandlerInner {
         }
       }
       Err(err) => {
-        log::error!("Failed to locate topic: {}, err: {}", req.topic, err);
+        log::error!("Failed to locate topic: {:?}, err: {:?}", req.topic, err);
 
         maxwell_protocol::ErrorRep {
           code: ErrorCode::FailedToLocateTopic as i32,
@@ -462,7 +462,7 @@ impl HandlerInner {
   #[inline(always)]
   fn activate_node(self: Rc<Self>) {
     if let Some(node_id) = self.node_id.borrow().as_ref() {
-      log::debug!("Activating node: id: {}, type: {:?}", node_id, self.node_type.get());
+      log::debug!("Activating node: id: {:?}, type: {:?}", node_id, self.node_type.get());
       match self.node_type.get() {
         NodeType::Frontend => FRONTEND_MGR.activate(node_id),
         NodeType::Backend => BACKEND_MGR.activate(node_id),
@@ -500,16 +500,16 @@ impl Actor for Handler {
   type Context = ws::WebsocketContext<Self>;
 
   fn started(&mut self, _ctx: &mut Self::Context) {
-    log::debug!("Handler actor started: id: {}", self.inner.id);
+    log::debug!("Handler actor started: id: {:?}", self.inner.id);
   }
 
   fn stopping(&mut self, _ctx: &mut Self::Context) -> Running {
-    log::debug!("Handler actor stopping: id: {}", self.inner.id);
+    log::debug!("Handler actor stopping: id: {:?}", self.inner.id);
     Running::Stop
   }
 
   fn stopped(&mut self, _ctx: &mut Self::Context) {
-    log::debug!("Handler actor stopped: id: {}", self.inner.id);
+    log::debug!("Handler actor stopped: id: {:?}", self.inner.id);
   }
 }
 

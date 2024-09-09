@@ -136,7 +136,7 @@ impl ServiceMgr {
           || service.http_port != curr_service.http_port
         {
           log::info!(
-            "The service's private endpoint was changed: current: {}, new: {}",
+            "The service's private endpoint was changed: current: {:?}, new: {:?}",
             curr_service.private_endpoint(),
             service.private_endpoint()
           );

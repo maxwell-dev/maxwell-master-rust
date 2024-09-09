@@ -130,7 +130,7 @@ impl TopicMgr {
     if let Some(old_backend_checksum) = self.info_store.get(&info_key).unwrap() {
       if curr_backend_checksum != old_backend_checksum {
         log::info!(
-          "The checksum of backends changed from: [{}] to: [{}]",
+          "The checksum of backends changed from: [{:?}] to: [{:?}]",
           old_backend_checksum,
           curr_backend_checksum
         );
