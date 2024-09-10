@@ -628,8 +628,9 @@ dependencies = [
 
 [[package]]
 name = "concurrent-initializer"
-version = "0.5.0"
-source = "git+https://github.com/xuchaoqian/concurrent-initializer-rust.git?branch=main#68c69bc74d18894114118f45efbaf2bcc0e8fc01"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88c3506ee0cb9dc534d4773faaf6f963f5a5673caf85d6bd43fc565ee338e489"
 dependencies = [
  "crossbeam-epoch",
  "num_cpus",
@@ -1242,7 +1243,7 @@ dependencies = [
 [[package]]
 name = "librocksdb-sys"
 version = "0.11.0+8.0.0"
-source = "git+https://github.com/xuchaoqian/rust-rocksdb.git?branch=more-apis-for-writebatch-handler#7667ccf81d0c635714423e775abaef2553719f0c"
+source = "git+http://gitlab.aijiaoyi.xyz/all/rust-rocksdb.git?branch=more-apis-for-writebatch-handler#7667ccf81d0c635714423e775abaef2553719f0c"
 dependencies = [
  "bindgen 0.64.0",
  "bzip2-sys",
@@ -1378,7 +1379,7 @@ dependencies = [
  "log4rs",
  "maxwell-protocol",
  "once_cell",
- "quick_cache 0.6.6",
+ "quick_cache",
  "rand",
  "rustls",
  "rustls-pemfile",
@@ -1390,12 +1391,13 @@ dependencies = [
 
 [[package]]
 name = "maxwell-protocol"
-version = "0.24.1"
-source = "git+https://github.com/maxwell-dev/maxwell-protocol-rust.git?tag=v0.24.1#3b1ccfadef6608168e0216239826b39ec1969de3"
+version = "0.24.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af8145332bfcad9c052f07b812193eae107cdb531784cc7285c396e060ed0c5e"
 dependencies = [
  "actix",
  "bytes",
- "prost 0.13.2",
+ "prost",
  "thiserror",
 ]
 
@@ -1669,35 +1671,12 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.12.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deb1435c188b76130da55f17a466d252ff7b1418b2ad3e037d127b94e3411f29"
-dependencies = [
- "bytes",
- "prost-derive 0.12.6",
-]
-
-[[package]]
-name = "prost"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b2ecbe40f08db5c006b5764a2645f7f3f141ce756412ac9e1dd6087e6d32995"
 dependencies = [
  "bytes",
- "prost-derive 0.13.2",
-]
-
-[[package]]
-name = "prost-derive"
-version = "0.12.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81bddcdb20abf9501610992b6759a4c888aef7d1a7247ef75e2404275ac24af1"
-dependencies = [
- "anyhow",
- "itertools 0.12.1",
- "proc-macro2",
- "quote",
- "syn 2.0.77",
+ "prost-derive",
 ]
 
 [[package]]
@@ -1711,18 +1690,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.77",
-]
-
-[[package]]
-name = "quick_cache"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a4b807ec70346b4fac3c13ae967634237847d49871f623fe0d455403346bad4"
-dependencies = [
- "ahash",
- "equivalent",
- "hashbrown 0.14.5",
- "parking_lot",
 ]
 
 [[package]]
@@ -1838,7 +1805,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.20.1"
-source = "git+https://github.com/xuchaoqian/rust-rocksdb.git?branch=more-apis-for-writebatch-handler#7667ccf81d0c635714423e775abaef2553719f0c"
+source = "git+http://gitlab.aijiaoyi.xyz/all/rust-rocksdb.git?branch=more-apis-for-writebatch-handler#7667ccf81d0c635714423e775abaef2553719f0c"
 dependencies = [
  "libc",
  "librocksdb-sys",
@@ -2039,8 +2006,8 @@ dependencies = [
 
 [[package]]
 name = "seriesdb"
-version = "0.10.1"
-source = "git+https://github.com/xuchaoqian/seriesdb-rust.git?tag=v0.10.1#3fe5171b511fafd286cb7dd37ff3389f300a1ebe"
+version = "0.11.1"
+source = "git+http://gitlab.aijiaoyi.xyz/all/seriesdb-rust.git?tag=v0.11.1#0c3d205a161a72f032e04151627bb0b74bf1cf8c"
 dependencies = [
  "ahash",
  "byteorder",
@@ -2048,8 +2015,8 @@ dependencies = [
  "chrono",
  "concurrent-initializer",
  "log",
- "prost 0.12.6",
- "quick_cache 0.4.3",
+ "prost",
+ "quick_cache",
  "rocksdb",
  "thiserror",
 ]
