@@ -12,8 +12,8 @@ RUN adduser --disabled-password --no-create-home --gecos "" --uid ${uid:-8081} m
 WORKDIR /maxwell-master
 RUN mkdir -p log
 COPY certificates/* certificates/
-COPY config/config.toml config/config.toml
-COPY config/log4rs.yaml config/log4rs.yaml
+COPY config/config.template.toml config/config.toml
+COPY config/log4rs.template.yaml config/log4rs.yaml
 COPY target/release/maxwell-master .
 RUN chown -R maxwell:maxwell .
 
