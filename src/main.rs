@@ -17,8 +17,8 @@ use actix_web::{
 use actix_web_actors::ws;
 use anyhow::{anyhow, Result};
 use futures::future;
-use rustls::{pki_types::PrivateKeyDer, ServerConfig};
-use rustls_pemfile::{certs, pkcs8_private_keys};
+use rustls::ServerConfig;
+use rustls_pemfile::{certs, private_key};
 
 use crate::{
   config::CONFIG,
@@ -114,11 +114,7 @@ fn create_tls_config() -> Result<ServerConfig> {
   let key_buf = &mut BufReader::new(key_file);
 
   let cert_chain = certs(cert_buf).collect::<Result<Vec<_>, _>>()?;
-  let mut keys = pkcs8_private_keys(key_buf).collect::<Result<Vec<_>, _>>().unwrap();
+  let key = private_key(key_buf)?.ok_or(anyhow!("no key found"))?;
 
-  Ok(
-    ServerConfig::builder()
-      .with_no_client_auth()
-      .with_single_cert(cert_chain, PrivateKeyDer::Pkcs8(keys.remove(0)))?,
-  )
+  Ok(ServerConfig::builder().with_no_client_auth().with_single_cert(cert_chain, key)?)
 }
