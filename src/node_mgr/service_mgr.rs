@@ -20,7 +20,7 @@ use seriesdb::{
   table::{NormalTable, Table, TableEnhanced},
 };
 
-use super::{Node, NodeId};
+use super::{Node, NodeId, NodeIter};
 use crate::{config::CONFIG, db::DB};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -103,6 +103,7 @@ impl Coder<NodeId, Service> for ServiceCoder {
 
 pub type ServiceRef<'a> = Ref<'a, NodeId, Service>;
 type ServiceStore = TableEnhanced<NormalTable, NodeId, Service, ServiceCoder>;
+pub type ServiceIter<'a> = NodeIter<'a, Service>;
 
 pub struct ServiceMgr {
   cache: DashMap<NodeId, Service, AHasher>,
@@ -210,6 +211,12 @@ impl ServiceMgr {
       }
       Entry::Vacant(_) => None,
     }
+  }
+
+  #[allow(dead_code)]
+  #[inline]
+  pub fn iter<'a>(&'a self) -> ServiceIter<'a> {
+    self.cache.iter()
   }
 
   #[inline]

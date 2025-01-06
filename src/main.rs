@@ -57,6 +57,15 @@ async fn pick_frontends(req: HttpRequest) -> HttpResponse {
   rep
 }
 
+async fn get_routes(req: HttpRequest) -> HttpResponse {
+  let rep = HttpResponse::Ok()
+    .content_type(ContentType::json())
+    .force_close()
+    .json(HttpHandler::new(&req).get_routes());
+  log::info!("http req: {:?}, rep: {:?}", req, rep);
+  rep
+}
+
 #[actix_web::main]
 async fn main() -> Result<()> {
   log4rs::init_file("config/log4rs.yaml", Default::default())?;
@@ -86,6 +95,7 @@ async fn create_http_server(is_https: bool) -> Result<()> {
       .route("/$ws", web::get().to(ws))
       .route("/$pick-frontend", web::get().to(pick_frontend))
       .route("/$pick-frontends", web::get().to(pick_frontends))
+      .route("/$get-routes", web::get().to(get_routes))
   })
   .backlog(CONFIG.server.backlog)
   .keep_alive(CONFIG.server.keep_alive)
