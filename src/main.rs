@@ -19,6 +19,7 @@ use anyhow::{anyhow, Result};
 use futures::future;
 use rustls::ServerConfig;
 use rustls_pemfile::{certs, private_key};
+use serde::Deserialize;
 
 use crate::{
   config::CONFIG,
@@ -26,6 +27,12 @@ use crate::{
 };
 
 static SERVER_NAME: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+
+#[derive(Debug, Deserialize)]
+struct HttpsQuery {
+  #[serde(default)]
+  is_https: bool,
+}
 
 async fn health(_req: HttpRequest) -> Result<HttpResponse, Error> {
   Ok(HttpResponse::Ok().body(""))
@@ -39,21 +46,21 @@ async fn ws(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Erro
   rep
 }
 
-async fn pick_frontend(req: HttpRequest) -> HttpResponse {
+async fn pick_frontend(req: HttpRequest, query: web::Query<HttpsQuery>) -> HttpResponse {
   let rep = HttpResponse::Ok()
     .content_type(ContentType::json())
     .force_close()
-    .json(HttpHandler::new(&req).pick_frontend());
-  log::info!("http req: {:?}, rep: {:?}", req, rep);
+    .json(HttpHandler::new(&req).pick_frontend(query.is_https));
+  log::info!("{} req: {:?}, rep: {:?}", req.connection_info().scheme(), req, rep);
   rep
 }
 
-async fn pick_frontends(req: HttpRequest) -> HttpResponse {
+async fn pick_frontends(req: HttpRequest, query: web::Query<HttpsQuery>) -> HttpResponse {
   let rep = HttpResponse::Ok()
     .content_type(ContentType::json())
     .force_close()
-    .json(HttpHandler::new(&req).pick_frontends());
-  log::info!("http req: {:?}, rep: {:?}", req, rep);
+    .json(HttpHandler::new(&req).pick_frontends(query.is_https));
+  log::info!("{} req: {:?}, rep: {:?}", req.connection_info().scheme(), req, rep);
   rep
 }
 
@@ -62,18 +69,22 @@ async fn get_routes(req: HttpRequest) -> HttpResponse {
     .content_type(ContentType::json())
     .force_close()
     .json(HttpHandler::new(&req).get_routes());
-  log::info!("http req: {:?}, rep: {:?}", req, rep);
+  log::info!("{} req: {:?}, rep: {:?}", req.connection_info().scheme(), req, rep);
   rep
 }
 
 #[actix_web::main]
 async fn main() -> Result<()> {
   log4rs::init_file("config/log4rs.yaml", Default::default())?;
-  future::try_join(create_http_server(false), create_http_server(true)).await?;
+  future::try_join(
+    create_http_server(CONFIG.server.http_port, false),
+    create_http_server(CONFIG.server.https_port, true),
+  )
+  .await?;
   Ok(())
 }
 
-async fn create_http_server(is_https: bool) -> Result<()> {
+async fn create_http_server(port: u32, is_https: bool) -> Result<()> {
   let http_server = HttpServer::new(move || {
     App::new()
       .wrap(middleware::Logger::default())
@@ -104,12 +115,9 @@ async fn create_http_server(is_https: bool) -> Result<()> {
   .workers(CONFIG.server.workers);
 
   if is_https {
-    http_server.bind_rustls_0_23(
-      format!("{}:{}", "0.0.0.0", CONFIG.server.https_port),
-      create_tls_config()?,
-    )?
+    http_server.bind_rustls_0_23(format!("{}:{}", "0.0.0.0", port), create_tls_config()?)?
   } else {
-    http_server.bind(format!("{}:{}", "0.0.0.0", CONFIG.server.http_port))?
+    http_server.bind(format!("{}:{}", "0.0.0.0", port))?
   }
   .run()
   .await

@@ -70,12 +70,12 @@ impl HttpHandler {
   }
 
   #[inline]
-  pub fn pick_frontend(&self) -> AssignFrontendRep {
+  pub fn pick_frontend(&self, is_https: bool) -> AssignFrontendRep {
     if let Some(frontend) = FRONTEND_MGR.pick() {
       AssignFrontendRep {
         code: ErrorCode::Ok as i32,
         desc: None,
-        endpoint: Some(self.build_endpoint(&frontend)),
+        endpoint: Some(self.build_endpoint(&frontend, is_https)),
       }
     } else {
       log::error!("Failed to pick an available frontend.");
@@ -89,10 +89,10 @@ impl HttpHandler {
   }
 
   #[inline]
-  pub fn pick_frontends(&self) -> GetFrontendsRep {
+  pub fn pick_frontends(&self, is_https: bool) -> GetFrontendsRep {
     let mut endpoints = vec![];
     for frontend in FRONTEND_MGR.iter() {
-      endpoints.push(self.build_endpoint(&frontend));
+      endpoints.push(self.build_endpoint(&frontend, is_https));
     }
     GetFrontendsRep { code: ErrorCode::Ok as i32, desc: None, endpoints }
   }
@@ -171,9 +171,9 @@ impl HttpHandler {
   }
 
   #[inline]
-  fn build_endpoint(&self, frontend: &Frontend) -> String {
+  fn build_endpoint(&self, frontend: &Frontend, is_https: bool) -> String {
     if self.addr_type == AddrType::Loopback {
-      if self.is_https {
+      if is_https || self.is_https {
         format!("{}:{}", frontend.domain, frontend.https_port)
       } else {
         format!("{}:{}", frontend.private_ip, frontend.http_port)
@@ -181,7 +181,7 @@ impl HttpHandler {
     } else if self.addr_type == AddrType::Private {
       format!("{}:{}", frontend.private_ip, frontend.http_port)
     } else {
-      if self.is_https {
+      if is_https || self.is_https {
         format!("{}:{}", frontend.domain, frontend.https_port)
       } else {
         format!("{}:{}", frontend.public_ip, frontend.http_port)
