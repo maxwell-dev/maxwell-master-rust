@@ -70,12 +70,12 @@ impl HttpHandler {
   }
 
   #[inline]
-  pub fn pick_frontend(&self, is_https: bool) -> AssignFrontendRep {
+  pub fn pick_frontend(&self, ensure_https: bool, ensure_public: bool) -> AssignFrontendRep {
     if let Some(frontend) = FRONTEND_MGR.pick() {
       AssignFrontendRep {
         code: ErrorCode::Ok as i32,
         desc: None,
-        endpoint: Some(self.build_endpoint(&frontend, is_https)),
+        endpoint: Some(self.build_endpoint(&frontend, ensure_https, ensure_public)),
       }
     } else {
       log::error!("Failed to pick an available frontend.");
@@ -89,10 +89,10 @@ impl HttpHandler {
   }
 
   #[inline]
-  pub fn pick_frontends(&self, is_https: bool) -> GetFrontendsRep {
+  pub fn pick_frontends(&self, ensure_https: bool, ensure_public: bool) -> GetFrontendsRep {
     let mut endpoints = vec![];
     for frontend in FRONTEND_MGR.iter() {
-      endpoints.push(self.build_endpoint(&frontend, is_https));
+      endpoints.push(self.build_endpoint(&frontend, ensure_https, ensure_public));
     }
     GetFrontendsRep { code: ErrorCode::Ok as i32, desc: None, endpoints }
   }
@@ -171,24 +171,14 @@ impl HttpHandler {
   }
 
   #[inline]
-  fn build_endpoint(&self, frontend: &Frontend, is_https: bool) -> String {
-    if self.addr_type == AddrType::Loopback {
-      if is_https || self.is_https {
-        format!("{}:{}", frontend.domain, frontend.https_port)
-      } else {
-        format!("{}:{}", frontend.private_ip, frontend.http_port)
-      }
-    } else if self.addr_type == AddrType::Private {
-      if is_https || self.is_https {
-        format!("{}:{}", frontend.domain, frontend.https_port)
-      } else {
-        format!("{}:{}", frontend.private_ip, frontend.http_port)
-      }
+  fn build_endpoint(&self, frontend: &Frontend, ensure_https: bool, ensure_public: bool) -> String {
+    if ensure_https || self.is_https {
+      format!("{}:{}", frontend.domain, frontend.https_port)
     } else {
-      if is_https || self.is_https {
-        format!("{}:{}", frontend.domain, frontend.https_port)
-      } else {
+      if ensure_public || self.addr_type == AddrType::Public {
         format!("{}:{}", frontend.public_ip, frontend.http_port)
+      } else {
+        format!("{}:{}", frontend.private_ip, frontend.http_port)
       }
     }
   }

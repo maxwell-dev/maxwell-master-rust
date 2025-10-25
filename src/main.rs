@@ -31,7 +31,9 @@ static SERVER_NAME: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_
 #[derive(Debug, Deserialize)]
 struct HttpsQuery {
   #[serde(default)]
-  is_https: bool,
+  ensure_https: bool,
+  #[serde(default)]
+  ensure_public: bool,
 }
 
 async fn health(_req: HttpRequest) -> Result<HttpResponse, Error> {
@@ -50,7 +52,7 @@ async fn pick_frontend(req: HttpRequest, query: web::Query<HttpsQuery>) -> HttpR
   let rep = HttpResponse::Ok()
     .content_type(ContentType::json())
     .force_close()
-    .json(HttpHandler::new(&req).pick_frontend(query.is_https));
+    .json(HttpHandler::new(&req).pick_frontend(query.ensure_https, query.ensure_public));
   log::info!("{} req: {:?}, rep: {:?}", req.connection_info().scheme(), req, rep);
   rep
 }
@@ -59,7 +61,7 @@ async fn pick_frontends(req: HttpRequest, query: web::Query<HttpsQuery>) -> Http
   let rep = HttpResponse::Ok()
     .content_type(ContentType::json())
     .force_close()
-    .json(HttpHandler::new(&req).pick_frontends(query.is_https));
+    .json(HttpHandler::new(&req).pick_frontends(query.ensure_https, query.ensure_public));
   log::info!("{} req: {:?}, rep: {:?}", req.connection_info().scheme(), req, rep);
   rep
 }
@@ -84,7 +86,7 @@ async fn main() -> Result<()> {
   Ok(())
 }
 
-async fn create_http_server(port: u32, is_https: bool) -> Result<()> {
+async fn create_http_server(port: u32, use_https: bool) -> Result<()> {
   let http_server = HttpServer::new(move || {
     App::new()
       .wrap(middleware::Logger::default())
@@ -114,7 +116,7 @@ async fn create_http_server(port: u32, is_https: bool) -> Result<()> {
   .max_connections(CONFIG.server.max_connections)
   .workers(CONFIG.server.workers);
 
-  if is_https {
+  if use_https {
     http_server.bind_rustls_0_23(format!("{}:{}", "0.0.0.0", port), create_tls_config()?)?
   } else {
     http_server.bind(format!("{}:{}", "0.0.0.0", port))?
