@@ -179,7 +179,11 @@ impl HttpHandler {
         format!("{}:{}", frontend.private_ip, frontend.http_port)
       }
     } else if self.addr_type == AddrType::Private {
-      format!("{}:{}", frontend.private_ip, frontend.http_port)
+      if is_https || self.is_https {
+        format!("{}:{}", frontend.domain, frontend.https_port)
+      } else {
+        format!("{}:{}", frontend.private_ip, frontend.http_port)
+      }
     } else {
       if is_https || self.is_https {
         format!("{}:{}", frontend.domain, frontend.https_port)
